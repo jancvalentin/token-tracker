@@ -35,6 +35,58 @@ function loadAllUsers() {
   };
 }
 
+/**
+ * Builds a clean numbers-only JSON payload with zero chat prompts, titles, or local paths.
+ */
+function buildMetricsOnlyPayload(userProfile) {
+  if (!userProfile) return {};
+  return {
+    schemaVersion: "2.0.0",
+    exportedAt: new Date().toISOString(),
+    telemetryStartDate: userProfile.telemetryStartDate || "2026-10-09",
+    developer: {
+      userId: userProfile.user?.userId || "local",
+      displayName: userProfile.user?.displayName || "Developer",
+    },
+    totals: userProfile.totals || {},
+    byRepository: (userProfile.byProject || []).map((p) => ({
+      repository: p.project,
+      gitRemote: p.gitRemote || null,
+      isGitRepo: Boolean(p.isGitRepo),
+      conversations: p.conversations || 0,
+      trackedConversations: p.trackedConversations || 0,
+      legacyConversationsPreTelemetry: p.legacyConversationsPreTelemetry || 0,
+      turns: p.turns || 0,
+      trackedTurns: p.trackedTurns || 0,
+      inputTokens: p.inputTokens || 0,
+      cacheReadTokens: p.cacheReadTokens || 0,
+      outputTokens: p.outputTokens || 0,
+      totalTokens: p.totalTokens || 0,
+      estimatedCostUsd: p.estimatedCostUsd || 0,
+      savedByCacheUsd: p.savedByCacheUsd || 0,
+    })),
+    byModel: (userProfile.byModel || []).map((m) => ({
+      model: m.model,
+      tier: m.rates?.tier || "Pro",
+      ratesPerMillionUsd: {
+        input: m.rates?.inputPerMillion,
+        cacheRead: m.rates?.cacheReadPerMillion,
+        output: m.rates?.outputPerMillion,
+      },
+      conversations: m.conversations || 0,
+      trackedConversations: m.trackedConversations || 0,
+      turns: m.turns || 0,
+      inputTokens: m.inputTokens || 0,
+      cacheReadTokens: m.cacheReadTokens || 0,
+      outputTokens: m.outputTokens || 0,
+      totalTokens: m.totalTokens || 0,
+      estimatedCostUsd: m.estimatedCostUsd || 0,
+      savedByCacheUsd: m.savedByCacheUsd || 0,
+    })),
+    daily: userProfile.daily || [],
+  };
+}
+
 try {
   runSync({ backfill: true, printSummary: false });
 } catch (err) {
@@ -70,6 +122,19 @@ function handleRequest(req, res) {
     return;
   }
 
+  // Match /api/export-metrics (numbers-only JSON download, no chat content)
+  if (req.method === "GET" && (url.pathname === "/api/export-metrics" || url.pathname.endsWith("/api/export-metrics"))) {
+    const payload = loadAllUsers();
+    const metricsOnly = buildMetricsOnlyPayload(payload.users[0]);
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Content-Disposition": `attachment; filename="token-tracker-metrics-${dateStamp}.json"`,
+    });
+    res.end(JSON.stringify(metricsOnly, null, 2));
+    return;
+  }
+
   // Match /api/sync
   if (req.method === "POST" && (url.pathname === "/api/sync" || url.pathname.endsWith("/api/sync"))) {
     try {
@@ -80,34 +145,6 @@ function handleRequest(req, res) {
       res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ error: err.message }));
     }
-    return;
-  }
-
-  // Match /api/import
-  if (req.method === "POST" && (url.pathname === "/api/import" || url.pathname.endsWith("/api/import"))) {
-    let body = "";
-    req.setEncoding("utf8");
-    req.on("data", (chunk) => (body += chunk));
-    req.on("end", () => {
-      try {
-        const parsed = JSON.parse(body);
-        const items = Array.isArray(parsed.users) ? parsed.users : [parsed];
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-        for (const item of items) {
-          if (!item || !item.user || !item.user.userId) {
-            throw new Error("Invalid user token profile JSON.");
-          }
-          const safeId = String(item.user.userId).replace(/[^a-z0-9_-]/gi, "-").toLowerCase();
-          fs.writeFileSync(path.join(DATA_DIR, `${safeId}.json`), JSON.stringify(item, null, 2), "utf8");
-        }
-        const { bundle } = runSync({ backfill: false, printSummary: false });
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(bundle));
-      } catch (err) {
-        res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-    });
     return;
   }
 
@@ -143,7 +180,7 @@ function handleRequest(req, res) {
 const primaryServer = http.createServer(handleRequest);
 primaryServer.listen(PRIMARY_PORT, "127.0.0.1", () => {
   console.log(`[sidecar] listening on 127.0.0.1:${PRIMARY_PORT}`);
-  console.log(`[Token Tracker] Reading team profiles from: ${DATA_DIR}`);
+  console.log(`[Token Tracker] Reading local profile from: ${DATA_DIR}`);
 
   if (!process.argv.includes("--no-open") && !SIDECAR_PORT && process.platform === "darwin") {
     exec(`open "http://localhost:${PRIMARY_PORT}"`);
