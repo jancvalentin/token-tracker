@@ -1,0 +1,15 @@
+{
+  "name": "token-tracker",
+  "displayName": "Token Tracker & Team Spend UI",
+  "version": "1.0.0",
+  "description": "Tracks token spending (input, cache read, and output tokens) via Stop hooks and historical transcript backfill, with a lightweight local UI to compare usage across repositories, models, and teammates.",
+  "author": {
+    "name": "Jan Valentin"
+  },
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Sync my historical transcripts and show a summary of my token usage by project",
+    "Launch the Token Tracker UI dashboard so I can compare usage with my team",
+    "Analyze my cache hit efficiency and top token-consuming conversations this week"
+  ]
+}

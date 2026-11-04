@@ -1,0 +1,12 @@
+{
+  "token-tracker": {
+    "enabled": true,
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ./scripts/sync-tokens.mjs",
+        "timeout": 15
+      }
+    ]
+  }
+}

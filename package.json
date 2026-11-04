@@ -1,0 +1,12 @@
+{
+  "name": "token-tracker",
+  "version": "1.0.0",
+  "description": "Antigravity plugin and local team dashboard for tracking token usage, cache efficiency, and estimated spend across historical and live transcripts.",
+  "type": "module",
+  "scripts": {
+    "sync": "node ./scripts/sync-tokens.mjs --backfill",
+    "start": "node ./scripts/ui-server.mjs",
+    "ui": "node ./scripts/sync-tokens.mjs --backfill && node ./scripts/ui-server.mjs",
+    "stats": "node ./scripts/sync-tokens.mjs --backfill --summary"
+  }
+}
