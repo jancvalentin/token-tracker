@@ -202,14 +202,54 @@
       font-variant-numeric: tabular-nums;
     }
 
+    /* Scrollable and accessible table containers */
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      margin-top: 4px;
+    }
+    .table-wrap:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -1px;
+    }
+    .table-wrap::-webkit-scrollbar {
+      height: 8px;
+    }
+    .table-wrap::-webkit-scrollbar-track {
+      background: var(--surface);
+      border-radius: 4px;
+    }
+    .table-wrap::-webkit-scrollbar-thumb {
+      background: #5f6368;
+      border-radius: 4px;
+      border: 2px solid var(--surface);
+    }
+    .table-wrap::-webkit-scrollbar-thumb:hover {
+      background: var(--accent);
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
       font-size: 0.78rem;
       table-layout: auto;
     }
+    #teamTable {
+      min-width: 860px;
+    }
+    #modelTable {
+      min-width: 860px;
+    }
+    #convTable {
+      min-width: 820px;
+    }
     th, td {
-      padding: 9px 10px;
+      padding: 9px 12px;
       text-align: left;
       border-bottom: 1px solid var(--border);
       white-space: nowrap;
@@ -221,15 +261,21 @@
       font-size: 0.68rem;
       text-transform: uppercase;
       letter-spacing: 0.04em;
-      background: rgba(53, 54, 58, 0.5);
+      background: rgba(53, 54, 58, 0.75);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    tr:last-child td {
+      border-bottom: none;
     }
     tr:hover td { background: rgba(60, 64, 67, 0.35); }
     .num { text-align: right; font-variant-numeric: tabular-nums; }
 
-    /* Flexible title cell that expands horizontally to fill remaining space without overflowing the table */
+    /* Title cell with comfortable min and max width inside scrollable table */
     td.cell-expand {
-      width: 100%;
-      max-width: 0;
+      min-width: 220px;
+      max-width: 380px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -272,10 +318,28 @@
       padding-bottom: 22px;
       border-bottom: 1px solid var(--border);
       width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+    }
+    .bar-chart:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -1px;
+    }
+    .bar-chart::-webkit-scrollbar {
+      height: 6px;
+    }
+    .bar-chart::-webkit-scrollbar-track {
+      background: var(--surface);
+      border-radius: 3px;
+    }
+    .bar-chart::-webkit-scrollbar-thumb {
+      background: #5f6368;
+      border-radius: 3px;
     }
     .bar-col {
       flex: 1;
-      min-width: 0;
+      min-width: 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -452,23 +516,25 @@
         </div>
         <span style="font-size: 0.74rem; color: var(--muted);">Stored in <code>data/users/&lt;user&gt;.json</code></span>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Developer</th>
-            <th class="num">Sessions</th>
-            <th class="num">Prompts / Turns</th>
-            <th class="num">Uncached In</th>
-            <th class="num">Cache Read</th>
-            <th class="num">Output</th>
-            <th class="num">Total Tokens</th>
-            <th class="num">Cache Hit %</th>
-            <th class="num">Saved by Cache</th>
-            <th class="num">Actual Spend</th>
-          </tr>
-        </thead>
-        <tbody id="teamTableBody"></tbody>
-      </table>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Team Comparison Leaderboard">
+        <table id="teamTable">
+          <thead>
+            <tr>
+              <th>Developer</th>
+              <th class="num">Sessions</th>
+              <th class="num">Prompts / Turns</th>
+              <th class="num">Uncached In</th>
+              <th class="num">Cache Read</th>
+              <th class="num">Output</th>
+              <th class="num">Total Tokens</th>
+              <th class="num">Cache Hit %</th>
+              <th class="num">Saved by Cache</th>
+              <th class="num">Actual Spend</th>
+            </tr>
+          </thead>
+          <tbody id="teamTableBody"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Daily Token Activity (Full-Width Horizontal Card) -->
@@ -484,7 +550,7 @@
           <span class="panel-title">Daily Token Activity (Last 21 Active Days)</span>
         </div>
       </div>
-      <div class="bar-chart" id="dailyChart"></div>
+      <div class="bar-chart" id="dailyChart" tabindex="0" role="region" aria-label="Daily Token Activity Chart"></div>
       <div class="legend">
         <span><i class="legend-dot" style="background: var(--green);"></i>Cache Read (90–95% off)</span>
         <span><i class="legend-dot" style="background: var(--accent);"></i>Uncached Input</span>
@@ -492,7 +558,7 @@
       </div>
     </div>
 
-    <!-- Model Pricing & Breakdown (Full-Width Horizontal Card, No Scroll Clipping) -->
+    <!-- Model Pricing & Breakdown (Full-Width Horizontal Card, Horizontally Scrollable) -->
     <div class="panel">
       <div class="panel-header">
         <div class="panel-title-wrap">
@@ -504,23 +570,25 @@
         </div>
         <span style="font-size: 0.74rem; color: var(--muted);">Official per-1M rates (Input / Cache Read / Output)</span>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Model Version</th>
-            <th>Tier</th>
-            <th class="num">Rates per 1M (In / Cache / Out)</th>
-            <th class="num">Turns</th>
-            <th class="num">Uncached In</th>
-            <th class="num">Cache Read</th>
-            <th class="num">Output</th>
-            <th class="num">Total Tokens</th>
-            <th class="num">Saved by Cache</th>
-            <th class="num">Actual Spend</th>
-          </tr>
-        </thead>
-        <tbody id="modelTableBody"></tbody>
-      </table>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Model Pricing and Spend Breakdown">
+        <table id="modelTable">
+          <thead>
+            <tr>
+              <th>Model Version</th>
+              <th>Tier</th>
+              <th class="num">Rates per 1M (In / Cache / Out)</th>
+              <th class="num">Turns</th>
+              <th class="num">Uncached In</th>
+              <th class="num">Cache Read</th>
+              <th class="num">Output</th>
+              <th class="num">Total Tokens</th>
+              <th class="num">Saved by Cache</th>
+              <th class="num">Actual Spend</th>
+            </tr>
+          </thead>
+          <tbody id="modelTableBody"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Usage by Repository (Horizontal Expanding Cards Grid, No Vertical Clipping) -->
@@ -537,7 +605,7 @@
       <div class="repo-grid" id="projectGrid"></div>
     </div>
 
-    <!-- Recent Conversations Ledger (Full-Width Horizontal Table, Zero Horizontal Overflow) -->
+    <!-- Recent Conversations Ledger (Full-Width Horizontal Table, Horizontally Scrollable) -->
     <div class="panel">
       <div class="panel-header">
         <div class="panel-title-wrap">
@@ -549,21 +617,23 @@
         </div>
         <input type="text" class="search-input" id="searchInput" placeholder="Search prompt title, project, or model..." />
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Developer</th>
-            <th>Repository</th>
-            <th>Conversation Prompt / Title</th>
-            <th>Model</th>
-            <th class="num">Turns</th>
-            <th class="num">Total Tokens</th>
-            <th class="num">Cost</th>
-          </tr>
-        </thead>
-        <tbody id="convTableBody"></tbody>
-      </table>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Conversation Token Ledger">
+        <table id="convTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Developer</th>
+              <th>Repository</th>
+              <th>Conversation Prompt / Title</th>
+              <th>Model</th>
+              <th class="num">Turns</th>
+              <th class="num">Total Tokens</th>
+              <th class="num">Cost</th>
+            </tr>
+          </thead>
+          <tbody id="convTableBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
