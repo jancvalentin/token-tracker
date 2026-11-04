@@ -14,7 +14,8 @@ This skill powers the `token-tracker` plugin (`~/.gemini/config/plugins/token-tr
    - Fires automatically at the end of every agent loop (`Stop`), reading the conversation's `transcript.jsonl` and updating `data/users/<userId>.json` + `ui/data-bundle.js`.
 2. **Full Historical Backfill (`--backfill`)**:
    - Scans every existing conversation directory under `~/.gemini/antigravity/brain/<conversationId>/.system_generated/logs/transcript.jsonl`.
-   - Extracts `input_tokens`, `cache_read_tokens`, `output_tokens`, prompt count, model turns, tool call counts, model name, and resolves the actual Git repository name.
+   - Resolves actual project attribution directly from Antigravity's `.gemini/config/projects/*.json` configuration and `conversation_summaries.db` (filtering out non-project entries like `outside-of-project` or virtual sidecars).
+   - Extracts `input_tokens`, `cache_read_tokens`, `output_tokens`, prompt count, model turns, tool call counts, model name, and repository name.
 3. **Numbers-Only JSON Metrics Export**:
    - The dashboard includes an **Export Metrics JSON** button that downloads `token-tracker-metrics-YYYY-MM-DD.json` containing strictly aggregated numeric metrics (`totals`, `byRepository`, `byModel`, `daily`) with zero chat titles, prompts, or local file paths so it can be safely imported into external apps.
 

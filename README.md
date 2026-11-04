@@ -1,13 +1,13 @@
 # Antigravity Token Tracker (`token-tracker-plugin`)
 
-An Antigravity plugin and local developer dashboard that tracks **uncached input tokens**, **cache read tokens**, **output tokens**, and **estimated spend (`$`)** across all your conversations and repositories—both **live via a `Stop` hook** and **retroactively across all historical transcripts**.
+An Antigravity plugin and local developer dashboard that tracks **uncached input tokens**, **cache read tokens**, **output tokens**, and **estimated spend (`\$`)** across all your conversations and repositories—both **live via a `Stop` hook** and **retroactively across all historical transcripts**.
 
 ---
 
 ## Features
 
-1. **100% Historical Backfill (`~/.gemini/antigravity/brain/`)**
-   - Automatically scans all existing `.system_generated/logs/transcript.jsonl` files in your local `brain/` folder so every past session is accounted for immediately.
+1. **100% Historical Backfill (`~/.gemini/antigravity/brain/` + `~/.gemini/config/projects/`)**
+   - Automatically scans all existing `.system_generated/logs/transcript.jsonl` files in your local `brain/` folder and resolves project attribution directly from Antigravity's `.gemini/config/projects/*.json` configuration (filtering to actual workspace/repository projects).
    - Idempotent deduplication by `conversationId` — running sync or hooks multiple times never double-counts tokens.
 2. **Zero-Latency Automatic Logging (`Stop` Hook)**
    - Bundles `hooks.json` with a `Stop` hook that updates your usage ledger automatically at the end of each agent turn.
