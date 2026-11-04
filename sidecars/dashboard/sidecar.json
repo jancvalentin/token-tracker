@@ -1,0 +1,18 @@
+{
+  "display_name": "Token Tracker",
+  "description": "Team token usage, model spend, and cache efficiency dashboard rendered in the auxiliary side pane.",
+  "command": "node",
+  "args": ["../../scripts/ui-server.mjs", "--no-open"],
+  "restart_policy": "always",
+  "has_web_ui": true,
+  "ui_config": {
+    "display_name": "Token Tracker",
+    "views": [
+      {
+        "title": "Token Tracker",
+        "path": "/",
+        "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE"
+      }
+    ]
+  }
+}

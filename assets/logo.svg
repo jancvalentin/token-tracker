@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#818cf8" />
+    </linearGradient>
+    <linearGradient id="emerald" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+  </defs>
+  <rect x="12" y="12" width="104" height="104" rx="24" fill="url(#bg)" stroke="#334155" stroke-width="3" />
+  <rect x="28" y="68" width="14" height="30" rx="4" fill="url(#accent)" opacity="0.7" />
+  <rect x="48" y="52" width="14" height="46" rx="4" fill="url(#accent)" opacity="0.85" />
+  <rect x="68" y="38" width="14" height="60" rx="4" fill="url(#accent)" />
+  <rect x="88" y="28" width="14" height="70" rx="4" fill="url(#emerald)" />
+  <circle cx="35" cy="42" r="11" fill="#f59e0b" opacity="0.9" />
+  <text x="35" y="46" font-family="system-ui, sans-serif" font-size="13" font-weight="bold" fill="#0f172a" text-anchor="middle">$</text>
+</svg>

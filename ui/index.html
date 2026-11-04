@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Antigravity Token Tracker</title>
+  <style>
+    :root {
+      --bg: #202124;
+      --surface: #292a2d;
+      --surface-hover: #35363a;
+      --surface-elevated: #303134;
+      --border: #3c4043;
+      --text: #e8eaed;
+      --muted: #9aa0a6;
+      --accent: #8ab4f8;
+      --accent-solid: #1a73e8;
+      --green: #81c995;
+      --amber: #fdd663;
+      --purple: #c58af9;
+      --danger: #f28b82;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Google Sans", Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 18px 22px;
+      overflow-x: hidden;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 100%;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      background: rgba(138, 180, 248, 0.14);
+      border: 1px solid rgba(138, 180, 248, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .title-group h1 {
+      font-size: 1.08rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text);
+    }
+    .title-group p { color: var(--muted); font-size: 0.78rem; margin-top: 2px; }
+
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+    button, select, .file-label {
+      background: var(--surface-hover);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    button:hover, select:hover, .file-label:hover {
+      background: #3c4043;
+      border-color: var(--accent);
+    }
+    button.primary {
+      background: var(--accent-solid);
+      border-color: var(--accent-solid);
+      color: #fff;
+    }
+    button.primary:hover { background: #1b66c9; }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 780px) {
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      min-width: 0;
+    }
+    .kpi-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .kpi-value {
+      font-size: 1.45rem;
+      font-weight: 700;
+      margin-top: 6px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .kpi-sub {
+      font-size: 0.74rem;
+      color: var(--muted);
+      margin-top: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin-bottom: 16px;
+      width: 100%;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .panel-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .panel-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Horizontal Repository Cards Strip */
+    .repo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 10px;
+      width: 100%;
+    }
+    .repo-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+    .repo-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .repo-card-bottom {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+      table-layout: auto;
+    }
+    th, td {
+      padding: 9px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: rgba(53, 54, 58, 0.5);
+    }
+    tr:hover td { background: rgba(60, 64, 67, 0.35); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* Flexible title cell that expands horizontally to fill remaining space without overflowing the table */
+    td.cell-expand {
+      width: 100%;
+      max-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 500;
+      white-space: nowrap;
+      background: rgba(138, 180, 248, 0.14);
+      color: var(--accent);
+      border: 1px solid rgba(138, 180, 248, 0.3);
+    }
+    .badge-purple {
+      background: rgba(197, 138, 249, 0.14);
+      color: var(--purple);
+      border: 1px solid rgba(197, 138, 249, 0.3);
+    }
+    .badge-amber {
+      background: rgba(253, 214, 99, 0.14);
+      color: var(--amber);
+      border: 1px solid rgba(253, 214, 99, 0.3);
+    }
+    .badge-green {
+      background: rgba(129, 201, 149, 0.14);
+      color: var(--green);
+      border: 1px solid rgba(129, 201, 149, 0.3);
+    }
+
+    .bar-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      height: 155px;
+      padding-top: 16px;
+      padding-bottom: 22px;
+      border-bottom: 1px solid var(--border);
+      width: 100%;
+    }
+    .bar-col {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+      justify-content: flex-end;
+      position: relative;
+    }
+    .bar-stack {
+      width: 100%;
+      max-width: 28px;
+      border-radius: 3px 3px 0 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column-reverse;
+    }
+    .bar-cache { background: var(--green); }
+    .bar-in { background: var(--accent); }
+    .bar-out { background: var(--amber); }
+    .bar-label {
+      position: absolute;
+      bottom: -19px;
+      font-size: 0.64rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 0.74rem;
+      color: var(--muted);
+      margin-top: 22px;
+    }
+    .legend-dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      margin-right: 5px;
+    }
+    .search-input {
+      background: var(--surface-hover);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 11px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      width: 240px;
+    }
+    .search-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .icon-svg {
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="brand-icon">
+          <svg class="icon-svg" style="width:20px;height:20px" viewBox="0 0 24 24">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+        </div>
+        <div class="title-group">
+          <h1>Antigravity Team Token Tracker</h1>
+          <p id="subtitleText">Per-model Gemini 3.x Flash, Pro &amp; Claude Opus/Sonnet 5.5 pricing • Local JSON storage</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <select id="userFilter" title="Filter by Developer">
+          <option value="all">All Team Members</option>
+        </select>
+
+        <select id="projectFilter" title="Filter by Repository">
+          <option value="all">All Repositories</option>
+        </select>
+
+        <button class="primary" id="syncBtn">
+          <svg class="icon-svg" viewBox="0 0 24 24">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          <span>Rescan Local Transcripts</span>
+        </button>
+
+        <label class="file-label">
+          <svg class="icon-svg" viewBox="0 0 24 24">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <span>Import Teammate JSON</span>
+          <input type="file" id="importInput" accept=".json" style="display:none" />
+        </label>
+      </div>
+    </header>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span>Total Tokens Processed</span>
+          <svg class="icon-svg" style="color:var(--accent)" viewBox="0 0 24 24">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+        </div>
+        <div class="kpi-value" id="kpiTotalTokens">0</div>
+        <div class="kpi-sub" id="kpiTokenSplit">0 input • 0 cached • 0 output</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span>Actual Model Spend</span>
+          <svg class="icon-svg" style="color:var(--green)" viewBox="0 0 24 24">
+            <line x1="12" y1="1" x2="12" y2="23"></line>
+            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+          </svg>
+        </div>
+        <div class="kpi-value" id="kpiCost" style="color: var(--green);">$0.00</div>
+        <div class="kpi-sub" id="kpiCostSub">Tiered per-step Flash vs Pro pricing</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span>Cache Hit Efficiency</span>
+          <svg class="icon-svg" style="color:var(--purple)" viewBox="0 0 24 24">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+          </svg>
+        </div>
+        <div class="kpi-value" id="kpiCacheRate" style="color: var(--accent);">0%</div>
+        <div class="kpi-sub" id="kpiCacheSaved">Context reuse savings (90-95% off)</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span>Conversations &amp; Turns</span>
+          <svg class="icon-svg" style="color:var(--amber)" viewBox="0 0 24 24">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+        </div>
+        <div class="kpi-value" id="kpiSessions">0</div>
+        <div class="kpi-sub" id="kpiTurns">0 prompts • 0 planner turns</div>
+      </div>
+    </div>
+
+    <!-- Team Comparison Leaderboard (Full-Width Horizontal Card) -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title-wrap">
+          <svg class="icon-svg" style="color:var(--accent)" viewBox="0 0 24 24">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+          <span class="panel-title">Team Comparison Leaderboard</span>
+        </div>
+        <span style="font-size: 0.74rem; color: var(--muted);">Stored in <code>data/users/&lt;user&gt;.json</code></span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Developer</th>
+            <th class="num">Sessions</th>
+            <th class="num">Prompts / Turns</th>
+            <th class="num">Uncached In</th>
+            <th class="num">Cache Read</th>
+            <th class="num">Output</th>
+            <th class="num">Total Tokens</th>
+            <th class="num">Cache Hit %</th>
+            <th class="num">Saved by Cache</th>
+            <th class="num">Actual Spend</th>
+          </tr>
+        </thead>
+        <tbody id="teamTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Daily Token Activity (Full-Width Horizontal Card) -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title-wrap">
+          <svg class="icon-svg" style="color:var(--green)" viewBox="0 0 24 24">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          <span class="panel-title">Daily Token Activity (Last 21 Active Days)</span>
+        </div>
+      </div>
+      <div class="bar-chart" id="dailyChart"></div>
+      <div class="legend">
+        <span><i class="legend-dot" style="background: var(--green);"></i>Cache Read (90–95% off)</span>
+        <span><i class="legend-dot" style="background: var(--accent);"></i>Uncached Input</span>
+        <span><i class="legend-dot" style="background: var(--amber);"></i>Output</span>
+      </div>
+    </div>
+
+    <!-- Model Pricing & Breakdown (Full-Width Horizontal Card, No Scroll Clipping) -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title-wrap">
+          <svg class="icon-svg" style="color:var(--purple)" viewBox="0 0 24 24">
+            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+            <rect x="9" y="9" width="6" height="6"></rect>
+          </svg>
+          <span class="panel-title">Model Pricing &amp; Spend Breakdown</span>
+        </div>
+        <span style="font-size: 0.74rem; color: var(--muted);">Official per-1M rates (Input / Cache Read / Output)</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Model Version</th>
+            <th>Tier</th>
+            <th class="num">Rates per 1M (In / Cache / Out)</th>
+            <th class="num">Turns</th>
+            <th class="num">Uncached In</th>
+            <th class="num">Cache Read</th>
+            <th class="num">Output</th>
+            <th class="num">Total Tokens</th>
+            <th class="num">Saved by Cache</th>
+            <th class="num">Actual Spend</th>
+          </tr>
+        </thead>
+        <tbody id="modelTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Usage by Repository (Horizontal Expanding Cards Grid, No Vertical Clipping) -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title-wrap">
+          <svg class="icon-svg" style="color:var(--accent)" viewBox="0 0 24 24">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span class="panel-title">Usage by Repository</span>
+        </div>
+        <span style="font-size: 0.74rem; color: var(--muted);">Click a repository card to filter</span>
+      </div>
+      <div class="repo-grid" id="projectGrid"></div>
+    </div>
+
+    <!-- Recent Conversations Ledger (Full-Width Horizontal Table, Zero Horizontal Overflow) -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title-wrap">
+          <svg class="icon-svg" style="color:var(--accent)" viewBox="0 0 24 24">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+          </svg>
+          <span class="panel-title">Conversation Token Ledger</span>
+        </div>
+        <input type="text" class="search-input" id="searchInput" placeholder="Search prompt title, project, or model..." />
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Developer</th>
+            <th>Repository</th>
+            <th>Conversation Prompt / Title</th>
+            <th>Model</th>
+            <th class="num">Turns</th>
+            <th class="num">Total Tokens</th>
+            <th class="num">Cost</th>
+          </tr>
+        </thead>
+        <tbody id="convTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="./data-bundle.js"></script>
+  <script>
+    let state = {
+      users: [],
+      selectedUser: "all",
+      selectedProject: "all",
+      searchQuery: "",
+    };
+
+    function getModelRatesObj(mod) {
+      const lower = String(mod || "").toLowerCase();
+      if (lower.includes("3.8") && lower.includes("flash")) {
+        return { tier: "Flash", in: 0.75, cache: 0.075, out: 3.75 };
+      }
+      if (lower.includes("3.7") && lower.includes("flash")) {
+        return { tier: "Flash", in: 0.75, cache: 0.075, out: 3.75 };
+      }
+      if (lower.includes("3.6") && lower.includes("flash")) {
+        return { tier: "Flash", in: 1.50, cache: 0.15, out: 7.50 };
+      }
+      if (lower.includes("3.5") && lower.includes("flash")) {
+        return { tier: "Flash", in: 1.50, cache: 0.15, out: 9.00 };
+      }
+      if (lower.includes("flash")) {
+        return { tier: "Flash", in: 0.50, cache: 0.05, out: 3.00 };
+      }
+      if (lower.includes("3.1") || (lower.includes("gemini 3") && lower.includes("pro"))) {
+        return { tier: "Pro", in: 2.0, cache: 0.20, out: 12.0 };
+      }
+      if (lower.includes("gemini 4") || lower.includes("argon")) {
+        return { tier: "Pro", in: 2.0, cache: 0.20, out: 12.0 };
+      }
+      if (lower.includes("opus")) {
+        return { tier: "Opus", in: 4.0, cache: 0.20, out: 20.0 };
+      }
+      if (lower.includes("sonnet")) {
+        return { tier: "Sonnet", in: 2.0, cache: 0.10, out: 10.0 };
+      }
+      return { tier: "Pro", in: 1.25, cache: 0.125, out: 10.0 };
+    }
+
+    function fmtNum(n) {
+      return Number(n || 0).toLocaleString();
+    }
+
+    function fmtCompact(n) {
+      const val = Number(n || 0);
+      if (val >= 1_000_000_000) return (val / 1_000_000_000).toFixed(2) + "B";
+      if (val >= 1_000_000) return (val / 1_000_000).toFixed(2) + "M";
+      if (val >= 1_000) return (val / 1_000).toFixed(1) + "k";
+      return String(val);
+    }
+
+    function fmtUsd(n) {
+      return "$" + Number(n || 0).toFixed(2);
+    }
+
+    function apiFetch(endpoint, options = {}) {
+      const token = window.__SIDECAR_TOKEN__ || "";
+      const headers = Object.assign({}, options.headers || {});
+      if (token) headers["X-Sidecar-Token"] = token;
+      const cleanEndpoint = endpoint.replace(/^\//, "");
+      return fetch(cleanEndpoint, Object.assign({}, options, { headers }));
+    }
+
+    async function loadData() {
+      if (window.__TOKEN_TRACKER_DATA__ && Array.isArray(window.__TOKEN_TRACKER_DATA__.users) && window.__TOKEN_TRACKER_DATA__.users.length > 0) {
+        state.users = window.__TOKEN_TRACKER_DATA__.users;
+        populateFilters();
+        render();
+      }
+      try {
+        const res = await apiFetch("api/data");
+        if (res.ok) {
+          const payload = await res.json();
+          if (Array.isArray(payload.users) && payload.users.length > 0) {
+            state.users = payload.users;
+            populateFilters();
+            render();
+          }
+        }
+      } catch {}
+    }
+
+    function populateFilters() {
+      const userSelect = document.getElementById("userFilter");
+      const projSelect = document.getElementById("projectFilter");
+      const currentUser = userSelect.value;
+      const currentProj = projSelect.value;
+
+      userSelect.innerHTML = `<option value="all">All Team Members (${state.users.length})</option>`;
+      const projects = new Set();
+
+      for (const u of state.users) {
+        const opt = document.createElement("option");
+        opt.value = u.user.userId;
+        opt.textContent = `${u.user.displayName} (${u.user.userId})`;
+        userSelect.appendChild(opt);
+        for (const p of u.byProject || []) {
+          projects.add(p.project);
+        }
+      }
+
+      projSelect.innerHTML = `<option value="all">All Repositories (${projects.size})</option>`;
+      for (const p of Array.from(projects).sort()) {
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = p;
+        projSelect.appendChild(opt);
+      }
+
+      if ([...userSelect.options].some((o) => o.value === currentUser)) userSelect.value = currentUser;
+      if ([...projSelect.options].some((o) => o.value === currentProj)) projSelect.value = currentProj;
+    }
+
+    function selectRepoFilter(proj) {
+      const projSelect = document.getElementById("projectFilter");
+      state.selectedProject = state.selectedProject === proj ? "all" : proj;
+      projSelect.value = state.selectedProject;
+      render();
+    }
+
+    function render() {
+      const filteredUsers =
+        state.selectedUser === "all"
+          ? state.users
+          : state.users.filter((u) => u.user.userId === state.selectedUser);
+
+      const allConvs = [];
+      for (const u of filteredUsers) {
+        for (const c of u.conversations || []) {
+          if (state.selectedProject !== "all" && c.project !== state.selectedProject) continue;
+          if (state.searchQuery) {
+            const q = state.searchQuery.toLowerCase();
+            const matchTitle = (c.title || "").toLowerCase().includes(q);
+            const matchProj = (c.project || "").toLowerCase().includes(q);
+            const matchModel = (c.model || "").toLowerCase().includes(q);
+            if (!matchTitle && !matchProj && !matchModel) continue;
+          }
+          allConvs.push({ ...c, user: u.user });
+        }
+      }
+
+      allConvs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+      let inputTokens = 0, cacheReadTokens = 0, outputTokens = 0, prompts = 0, turns = 0, cost = 0, savedByCache = 0;
+
+      for (const c of allConvs) {
+        inputTokens += c.inputTokens || 0;
+        cacheReadTokens += c.cacheReadTokens || 0;
+        outputTokens += c.outputTokens || 0;
+        prompts += c.promptCount || 0;
+        turns += c.turnCount || 0;
+        cost += c.estimatedCostUsd || 0;
+        savedByCache += c.savedByCacheUsd || 0;
+      }
+
+      const totalTokens = inputTokens + cacheReadTokens + outputTokens;
+      const cacheHitPct =
+        inputTokens + cacheReadTokens > 0
+          ? ((cacheReadTokens / (inputTokens + cacheReadTokens)) * 100).toFixed(2)
+          : "0.00";
+
+      document.getElementById("kpiTotalTokens").textContent = fmtCompact(totalTokens);
+      document.getElementById("kpiTokenSplit").textContent =
+        `${fmtCompact(inputTokens)} in • ${fmtCompact(cacheReadTokens)} cached • ${fmtCompact(outputTokens)} out`;
+      document.getElementById("kpiCost").textContent = fmtUsd(cost);
+      document.getElementById("kpiCostSub").textContent =
+        `${fmtUsd(allConvs.length ? cost / allConvs.length : 0)} avg per conversation`;
+      document.getElementById("kpiCacheRate").textContent = `${cacheHitPct}%`;
+      document.getElementById("kpiCacheSaved").textContent = `Est. ${fmtUsd(savedByCache)} saved via cache discount`;
+      document.getElementById("kpiSessions").textContent = fmtNum(allConvs.length);
+      document.getElementById("kpiTurns").textContent = `${fmtNum(prompts)} prompts • ${fmtNum(turns)} turns`;
+
+      renderTeamTable();
+      renderDailyChart(allConvs);
+      renderModelAndProjectTables(allConvs);
+      renderConversationsTable(allConvs.slice(0, 80));
+    }
+
+    function renderTeamTable() {
+      const tbody = document.getElementById("teamTableBody");
+      const rows = [...state.users].sort((a, b) => (b.totals?.totalTokens || 0) - (a.totals?.totalTokens || 0));
+      tbody.innerHTML = rows
+        .map((u) => {
+          const t = u.totals || {};
+          return `
+            <tr>
+              <td>
+                <strong>${u.user.displayName}</strong>
+                <span class="badge badge-green" style="margin-left:6px;">@${u.user.userId}</span>
+              </td>
+              <td class="num">${fmtNum(t.conversations)}</td>
+              <td class="num">${fmtNum(t.prompts)} / ${fmtNum(t.turns)}</td>
+              <td class="num">${fmtCompact(t.inputTokens)}</td>
+              <td class="num" style="color:var(--green);">${fmtCompact(t.cacheReadTokens)}</td>
+              <td class="num">${fmtCompact(t.outputTokens)}</td>
+              <td class="num"><strong>${fmtCompact(t.totalTokens)}</strong></td>
+              <td class="num" style="color:var(--accent);">${t.cacheHitRatePct || 0}%</td>
+              <td class="num" style="color:var(--muted);">${fmtUsd(t.savedByCacheUsd || 0)}</td>
+              <td class="num" style="color:var(--green);"><strong>${fmtUsd(t.estimatedCostUsd)}</strong></td>
+            </tr>
+          `;
+        })
+        .join("");
+    }
+
+    function renderDailyChart(convs) {
+      const dailyMap = {};
+      for (const c of convs) {
+        for (const [date, d] of Object.entries(c.byDate || {})) {
+          if (!dailyMap[date]) {
+            dailyMap[date] = { date, input: 0, cache: 0, output: 0, cost: 0 };
+          }
+          dailyMap[date].input += d.inputTokens || 0;
+          dailyMap[date].cache += d.cacheReadTokens || 0;
+          dailyMap[date].output += d.outputTokens || 0;
+          dailyMap[date].cost += d.estimatedCostUsd || 0;
+        }
+      }
+
+      const days = Object.values(dailyMap)
+        .filter((d) => d.input + d.cache + d.output > 0)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(-21);
+
+      const container = document.getElementById("dailyChart");
+      if (days.length === 0) {
+        container.innerHTML = `<div style="color:var(--muted);margin:auto;">No token telemetry for selected filter</div>`;
+        return;
+      }
+
+      const maxTot = Math.max(...days.map((d) => d.input + d.cache + d.output), 1);
+      container.innerHTML = days
+        .map((d) => {
+          const total = d.input + d.cache + d.output;
+          const hCache = Math.max(2, Math.round((d.cache / maxTot) * 110));
+          const hIn = Math.max(d.input > 0 ? 2 : 0, Math.round((d.input / maxTot) * 110));
+          const hOut = Math.max(d.output > 0 ? 2 : 0, Math.round((d.output / maxTot) * 110));
+          const shortDate = d.date.slice(5);
+          return `
+            <div class="bar-col" title="${d.date}\nTotal: ${fmtCompact(total)}\nActual Cost: ${fmtUsd(d.cost)}">
+              <div class="bar-stack">
+                <div class="bar-cache" style="height:${hCache}px"></div>
+                <div class="bar-in" style="height:${hIn}px"></div>
+                <div class="bar-out" style="height:${hOut}px"></div>
+              </div>
+              <span class="bar-label">${shortDate}</span>
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    function renderModelAndProjectTables(convs) {
+      const byMod = {};
+      const byProj = {};
+
+      for (const c of convs) {
+        const mBreakdowns = c.byModelInConv && Object.keys(c.byModelInConv).length > 0
+          ? c.byModelInConv
+          : {
+              [c.model || "Gemini 2.5 Pro (Default)"]: {
+                inputTokens: c.inputTokens || 0,
+                cacheReadTokens: c.cacheReadTokens || 0,
+                outputTokens: c.outputTokens || 0,
+                turns: c.turnCount || 0,
+                estimatedCostUsd: c.estimatedCostUsd || 0,
+                savedByCacheUsd: c.savedByCacheUsd || 0,
+              },
+            };
+
+        for (const [mod, mData] of Object.entries(mBreakdowns)) {
+          if (!byMod[mod]) {
+            byMod[mod] = { model: mod, turns: 0, inT: 0, cacheT: 0, outT: 0, tokens: 0, saved: 0, cost: 0 };
+          }
+          byMod[mod].turns += mData.turns || 0;
+          byMod[mod].inT += mData.inputTokens || 0;
+          byMod[mod].cacheT += mData.cacheReadTokens || 0;
+          byMod[mod].outT += mData.outputTokens || 0;
+          byMod[mod].tokens += (mData.inputTokens || 0) + (mData.cacheReadTokens || 0) + (mData.outputTokens || 0);
+          byMod[mod].saved += mData.savedByCacheUsd || 0;
+          byMod[mod].cost += mData.estimatedCostUsd || 0;
+        }
+
+        const p = c.project || "general";
+        if (!byProj[p]) byProj[p] = { project: p, sessions: 0, turns: 0, tokens: 0, cost: 0 };
+        byProj[p].sessions += 1;
+        byProj[p].turns += c.turnCount || 0;
+        byProj[p].tokens += c.totalTokens || 0;
+        byProj[p].cost += c.estimatedCostUsd || 0;
+      }
+
+      if (!Object.keys(byMod).some((k) => k.toLowerCase().includes("sonnet 5.5"))) {
+        byMod["Claude Sonnet 5.5"] = { model: "Claude Sonnet 5.5", turns: 0, inT: 0, cacheT: 0, outT: 0, tokens: 0, saved: 0, cost: 0 };
+      }
+
+      const modRows = Object.values(byMod).sort((a, b) => b.tokens - a.tokens || b.turns - a.turns);
+      document.getElementById("modelTableBody").innerHTML = modRows
+        .map((m) => {
+          const r = getModelRatesObj(m.model);
+          const badgeClass = r.tier === "Flash" ? "badge badge-amber" : "badge badge-purple";
+          return `
+            <tr>
+              <td><span class="${badgeClass}">${m.model}</span></td>
+              <td style="color:var(--muted);">${r.tier}</td>
+              <td class="num" style="color:var(--muted);font-size:0.74rem;">$${r.in.toFixed(2)} / $${r.cache.toFixed(3).replace(/0$/, '')} / $${r.out.toFixed(2)}</td>
+              <td class="num">${fmtNum(m.turns)}</td>
+              <td class="num">${m.tokens > 0 ? fmtCompact(m.inT) : "-"}</td>
+              <td class="num" style="color:var(--green);">${m.tokens > 0 ? fmtCompact(m.cacheT) : "-"}</td>
+              <td class="num">${m.tokens > 0 ? fmtCompact(m.outT) : "-"}</td>
+              <td class="num"><strong>${m.tokens > 0 ? fmtCompact(m.tokens) : '<span style="color:var(--muted);font-weight:400;">Pre-telemetry</span>'}</strong></td>
+              <td class="num" style="color:var(--muted);">${fmtUsd(m.saved)}</td>
+              <td class="num" style="color:var(--green);"><strong>${fmtUsd(m.cost)}</strong></td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      const projRows = Object.values(byProj).sort((a, b) => b.tokens - a.tokens || b.sessions - a.sessions);
+      document.getElementById("projectGrid").innerHTML = projRows
+        .map((p) => {
+          const isSelected = state.selectedProject === p.project;
+          const borderStyle = isSelected ? "border-color: var(--accent); background: rgba(138, 180, 248, 0.08);" : "";
+          return `
+            <div class="repo-card" style="cursor:pointer;${borderStyle}" onclick="selectRepoFilter('${p.project}')">
+              <div class="repo-card-top">
+                <span class="badge">${p.project}</span>
+                <strong style="color:var(--green);font-size:0.82rem;">${fmtUsd(p.cost)}</strong>
+              </div>
+              <div class="repo-card-bottom">
+                <span>${fmtNum(p.sessions)} sessions • ${fmtNum(p.turns)} turns</span>
+                <strong style="color:var(--text);">${fmtCompact(p.tokens)}</strong>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    function renderConversationsTable(convs) {
+      const tbody = document.getElementById("convTableBody");
+      tbody.innerHTML = convs
+        .map((c) => {
+          const dateStr = (c.updatedAt || "").slice(0, 10);
+          const isFlash = String(c.model || "").toLowerCase().includes("flash");
+          const badgeClass = isFlash ? "badge badge-amber" : "badge badge-purple";
+          return `
+            <tr>
+              <td style="color:var(--muted);">${dateStr}</td>
+              <td><span class="badge badge-green">${c.user.displayName}</span></td>
+              <td><span class="badge">${c.project}</span></td>
+              <td class="cell-expand" title="${(c.title || "").replace(/"/g, "&quot;")}">
+                ${c.title}
+              </td>
+              <td><span class="${badgeClass}">${c.model}</span></td>
+              <td class="num">${fmtNum(c.turnCount)}</td>
+              <td class="num"><strong>${fmtCompact(c.totalTokens)}</strong></td>
+              <td class="num" style="color:var(--green);"><strong>${fmtUsd(c.estimatedCostUsd)}</strong></td>
+            </tr>
+          `;
+        })
+        .join("");
+    }
+
+    document.getElementById("userFilter").addEventListener("change", (e) => {
+      state.selectedUser = e.target.value;
+      render();
+    });
+
+    document.getElementById("projectFilter").addEventListener("change", (e) => {
+      state.selectedProject = e.target.value;
+      render();
+    });
+
+    document.getElementById("searchInput").addEventListener("input", (e) => {
+      state.searchQuery = e.target.value.trim();
+      render();
+    });
+
+    document.getElementById("syncBtn").addEventListener("click", async () => {
+      const btn = document.getElementById("syncBtn");
+      const origHtml = btn.innerHTML;
+      btn.textContent = "Scanning...";
+      try {
+        const res = await apiFetch("api/sync", { method: "POST" });
+        if (res.ok) {
+          const payload = await res.json();
+          if (payload.bundle && Array.isArray(payload.bundle.users)) {
+            state.users = payload.bundle.users;
+            populateFilters();
+            render();
+          }
+        }
+      } catch {}
+      btn.innerHTML = origHtml;
+    });
+
+    document.getElementById("importInput").addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const json = JSON.parse(text);
+        const importedUsers = Array.isArray(json.users) ? json.users : [json];
+        for (const iu of importedUsers) {
+          if (!iu.user || !iu.user.userId) continue;
+          const idx = state.users.findIndex((u) => u.user.userId === iu.user.userId);
+          if (idx >= 0) state.users[idx] = iu;
+          else state.users.push(iu);
+        }
+        populateFilters();
+        render();
+      } catch (err) {
+        alert("Failed to import JSON file: " + err.message);
+      }
+    });
+
+    loadData();
+  </script>
+</body>
+</html>
