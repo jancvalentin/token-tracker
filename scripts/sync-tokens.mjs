@@ -201,34 +201,180 @@ function getUserIdentity() {
   };
 }
 
-function extractProjectFromText(text) {
-  if (!text) return null;
-  const carrionMatch = text.match(/\/Git\/Carrion\/([a-zA-Z0-9._-]+)/);
-  if (carrionMatch && carrionMatch[1]) return carrionMatch[1];
+const REPO_METADATA_CACHE = new Map();
 
-  const pluginsMatch = text.match(/\/(?:Desktop\/)?Git\/plugins\/([a-zA-Z0-9._-]+)/);
-  if (pluginsMatch && pluginsMatch[1]) return pluginsMatch[1];
-
-  const gitMatch = text.match(/\/Desktop\/Git\/([a-zA-Z0-9._-]+)/);
-  if (gitMatch && gitMatch[1] && gitMatch[1] !== "Carrion" && gitMatch[1] !== "Projects" && gitMatch[1] !== "plugins") {
-    return gitMatch[1];
-  }
-
-  const projectsMatch = text.match(/\/Desktop\/Git\/Projects\/([a-zA-Z0-9._-]+)/);
-  if (projectsMatch && projectsMatch[1]) return projectsMatch[1];
-
-  const workspaceHeaderMatch = text.match(/Command Working Directory:\s*\/[^\n]*\/([a-zA-Z0-9._-]+)/);
-  if (workspaceHeaderMatch && workspaceHeaderMatch[1]) return workspaceHeaderMatch[1];
-
-  const genericRepoMatch = text.match(/\/(?:Git|Projects|Repos|Code|Developer)\/([a-zA-Z0-9._-]+)/);
+function isInvalidProjectCandidate(name) {
+  if (!name) return true;
+  const trimmed = name.trim();
+  if (!trimmed || trimmed.startsWith(".")) return true;
   if (
-    genericRepoMatch &&
-    genericRepoMatch[1] &&
-    !["Carrion", "Projects", "plugins"].includes(genericRepoMatch[1])
+    [
+      "Carrion",
+      "Projects",
+      "Git",
+      "Desktop",
+      "Users",
+      "general",
+      "README.md",
+      "TASK.md",
+      "CHANGELOG.md",
+      "install.sh",
+      "package.json",
+      "node_modules",
+      "src",
+      "app",
+      "apps",
+      "docs",
+    ].includes(trimmed)
   ) {
-    return genericRepoMatch[1];
+    return true;
+  }
+  if (/\.(md|sh|json|ts|js|mjs|cjs|html|css|png|jpg|jpeg|svg|pdf|txt|jsonl|yaml|yml|lock)$/i.test(trimmed)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Resolves a project slug to its actual local Git repository path and remote URL if present on disk.
+ */
+function resolveRepoMetadata(projectSlug) {
+  if (!projectSlug || projectSlug === "general") {
+    return { project: "general", repoPath: null, gitRemote: null, isGitRepo: false };
+  }
+  if (REPO_METADATA_CACHE.has(projectSlug)) {
+    return REPO_METADATA_CACHE.get(projectSlug);
   }
 
+  const home = os.homedir();
+  const candidateDirs = [
+    path.join(home, "Git", "Carrion", projectSlug),
+    path.join(home, "Git", "Projects", projectSlug),
+    path.join(home, "Git", projectSlug),
+    path.join(home, "Desktop", "Git", "Carrion", projectSlug),
+    path.join(home, "Desktop", "Git", "Projects", projectSlug),
+    path.join(home, "Desktop", "Git", projectSlug),
+  ];
+
+  let foundPath = null;
+  let isGitRepo = false;
+  let gitRemote = null;
+
+  // Pass 1: Prefer a candidate directory that is an actual Git repository (.git exists)
+  for (const dir of candidateDirs) {
+    try {
+      if (fs.existsSync(dir) && fs.statSync(dir).isDirectory() && fs.existsSync(path.join(dir, ".git"))) {
+        foundPath = dir;
+        isGitRepo = true;
+        try {
+          gitRemote =
+            execSync(`git -C "${dir}" config --get remote.origin.url`, {
+              encoding: "utf8",
+              stdio: ["ignore", "pipe", "ignore"],
+            }).trim() || null;
+        } catch {}
+        break;
+      }
+    } catch {}
+  }
+
+  // Pass 2: Fallback to an existing directory that has more than just .gemini
+  if (!foundPath) {
+    for (const dir of candidateDirs) {
+      try {
+        if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+          const entries = fs.readdirSync(dir).filter((e) => e !== ".gemini" && e !== ".DS_Store");
+          if (entries.length > 0) {
+            foundPath = dir;
+            break;
+          }
+        }
+      } catch {}
+    }
+  }
+
+  const meta = {
+    project: projectSlug,
+    repoPath: foundPath,
+    gitRemote,
+    isGitRepo,
+  };
+  REPO_METADATA_CACHE.set(projectSlug, meta);
+  return meta;
+}
+
+/**
+ * Extracts all repository candidates and weights from a block of text (file paths, worktrees, or workspace headers).
+ */
+function extractProjectsFromText(text) {
+  if (!text) return [];
+  const results = [];
+
+  // 1. Antigravity worktree paths: ~/.gemini/antigravity/worktrees/<repo>/<branch>
+  const worktreeRegex = /\/\.gemini\/antigravity\/worktrees\/([a-zA-Z0-9._-]+)\//g;
+  let match;
+  while ((match = worktreeRegex.exec(text)) !== null) {
+    if (!isInvalidProjectCandidate(match[1])) {
+      results.push({ project: match[1], weight: 4 });
+    }
+  }
+
+  // 2. Explicit Command Working Directory / Active Workspaces headers
+  const cwdRegex = /Command Working Directory:\s*(\/[^\n<\r]+)/g;
+  while ((match = cwdRegex.exec(text)) !== null) {
+    const p = extractSingleRepoFromPath(match[1].trim());
+    if (p) results.push({ project: p, weight: 6 });
+  }
+
+  // 3. Nested org folders: /Git/Carrion/<repo> or /Git/Projects/<repo>
+  const nestedRegex = /\/(?:Desktop\/)?Git\/(?:Carrion|Projects)\/([a-zA-Z0-9._-]+)/g;
+  while ((match = nestedRegex.exec(text)) !== null) {
+    if (!isInvalidProjectCandidate(match[1])) {
+      results.push({ project: match[1], weight: 4 });
+    }
+  }
+
+  // 4. Direct /Git/<repo> paths
+  const directGitRegex = /\/(?:Desktop\/)?Git\/([a-zA-Z0-9._-]+)(?:\/([a-zA-Z0-9._-]+))?/g;
+  while ((match = directGitRegex.exec(text)) !== null) {
+    const first = match[1];
+    const second = match[2];
+    if (first === "Carrion" || first === "Projects") {
+      if (second && !isInvalidProjectCandidate(second)) {
+        results.push({ project: second, weight: 4 });
+      }
+      continue;
+    }
+    if (first === "plugins") {
+      // Attribute to actual sub-plugin repo if inside a plugin folder, otherwise "plugins"
+      if (second && (second === "token-tracker-plugin" || second === "fullstack-cloud-plugin")) {
+        results.push({ project: "plugins", weight: 4 });
+      } else {
+        results.push({ project: "plugins", weight: 4 });
+      }
+      continue;
+    }
+    if (!isInvalidProjectCandidate(first)) {
+      results.push({ project: first, weight: 3 });
+    }
+  }
+
+  return results;
+}
+
+function extractSingleRepoFromPath(rawPath) {
+  if (!rawPath) return null;
+  const wt = rawPath.match(/\/\.gemini\/antigravity\/worktrees\/([a-zA-Z0-9._-]+)/);
+  if (wt && !isInvalidProjectCandidate(wt[1])) return wt[1];
+
+  const nested = rawPath.match(/\/(?:Desktop\/)?Git\/(?:Carrion|Projects)\/([a-zA-Z0-9._-]+)/);
+  if (nested && !isInvalidProjectCandidate(nested[1])) return nested[1];
+
+  const direct = rawPath.match(/\/(?:Desktop\/)?Git\/([a-zA-Z0-9._-]+)/);
+  if (direct && !isInvalidProjectCandidate(direct[1])) return direct[1];
+
+  const base = path.basename(rawPath);
+  if (!isInvalidProjectCandidate(base)) return base;
   return null;
 }
 
@@ -238,6 +384,11 @@ function cleanUserPromptTitle(rawContent) {
   const reqMatch = text.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/);
   if (reqMatch) {
     text = reqMatch[1];
+  } else {
+    const sysMsgMatch = text.match(/content=([^\n]+)/);
+    if (sysMsgMatch) {
+      text = sysMsgMatch[1];
+    }
   }
   text = text
     .replace(/<[^>]+>/g, " ")
@@ -250,6 +401,12 @@ function cleanUserPromptTitle(rawContent) {
 function normalizeModelName(rawModel) {
   if (!rawModel) return null;
   const trimmed = rawModel.trim();
+  if (
+    trimmed.length > 50 ||
+    /comment on this change|human readable name|exact string/i.test(trimmed)
+  ) {
+    return null;
+  }
   // Map legacy Claude 4.6 label in transcripts to Claude Opus 5.5 if needed, or preserve exact string
   if (/claude\s+opus\s+4\.6/i.test(trimmed)) {
     return trimmed.replace(/4\.6/i, "5.5");
@@ -266,7 +423,7 @@ function normalizeModelName(rawModel) {
 function extractModelFromInput(rawContent) {
   if (!rawContent) return null;
   const match = rawContent.match(
-    /Model Selection`?\s+from\s+.+?\s+to\s+([^\n]+?)\.(?:\s+No need|\s*<)/i
+    /Model Selection`?\s+from\s+[^\n]+?\s+to\s+((?:Gemini|Claude|GPT|o1|o3)[A-Za-z0-9 .()-]+?)\.(?:\s+No need|\s*<)/i
   );
   if (match && match[1]) {
     return normalizeModelName(match[1]);
@@ -302,11 +459,12 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
       ? normalizeModelName(hookMeta.modelName)
       : null;
   const projectVoteCounts = new Map();
+  let parentConversationId = null;
 
   if (Array.isArray(hookMeta.workspacePaths)) {
     for (const wp of hookMeta.workspacePaths) {
-      const p = extractProjectFromText(wp) || path.basename(wp);
-      if (p) projectVoteCounts.set(p, (projectVoteCounts.get(p) || 0) + 5);
+      const p = extractSingleRepoFromPath(wp);
+      if (p) projectVoteCounts.set(p, (projectVoteCounts.get(p) || 0) + 8);
     }
   }
 
@@ -354,13 +512,37 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
         currentModel = modelChange;
         detectedModel = modelChange;
       }
+    } else if (step.type === "SYSTEM_MESSAGE" && typeof step.content === "string") {
+      if (!title) {
+        title = cleanUserPromptTitle(step.content);
+      }
+      const senderMatch = step.content.match(/sender=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+      if (senderMatch && senderMatch[1] && senderMatch[1] !== conversationId) {
+        parentConversationId = senderMatch[1];
+      }
     }
 
     if (typeof step.content === "string") {
-      const proj = extractProjectFromText(step.content);
-      if (proj) {
-        const weight = step.type === "SYSTEM_MESSAGE" ? 1 : 3;
-        projectVoteCounts.set(proj, (projectVoteCounts.get(proj) || 0) + weight);
+      // Do not vote on CONVERSATION_HISTORY summaries which mention other sessions
+      if (step.type !== "CONVERSATION_HISTORY") {
+        const matches = extractProjectsFromText(step.content);
+        const mult = step.type === "SYSTEM_MESSAGE" ? 1 : 2;
+        for (const m of matches) {
+          projectVoteCounts.set(m.project, (projectVoteCounts.get(m.project) || 0) + m.weight * mult);
+        }
+      }
+    }
+
+    if (typeof step.thinking === "string") {
+      const matches = extractProjectsFromText(step.thinking);
+      for (const m of matches) {
+        projectVoteCounts.set(m.project, (projectVoteCounts.get(m.project) || 0) + m.weight);
+      }
+      if (/basket-app/i.test(step.thinking)) {
+        projectVoteCounts.set("basket-app", (projectVoteCounts.get("basket-app") || 0) + 2);
+      }
+      if (/blessed[\s-]aluminum/i.test(step.thinking)) {
+        projectVoteCounts.set("blessed-aluminum", (projectVoteCounts.get("blessed-aluminum") || 0) + 2);
       }
     }
 
@@ -428,10 +610,16 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
         byDate[dateKey].toolCalls += step.tool_calls.length;
         for (const tc of step.tool_calls) {
           if (tc.name === "invoke_subagent") subagentCount++;
+          if (tc.name === "send_message" && tc.args && tc.args.Recipient && !parentConversationId) {
+            const cleanedRecip = String(tc.args.Recipient).replace(/["']/g, "").trim();
+            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanedRecip)) {
+              parentConversationId = cleanedRecip;
+            }
+          }
           const argsStr = JSON.stringify(tc.args || {});
-          const proj = extractProjectFromText(argsStr);
-          if (proj) {
-            projectVoteCounts.set(proj, (projectVoteCounts.get(proj) || 0) + 4);
+          const matches = extractProjectsFromText(argsStr);
+          for (const m of matches) {
+            projectVoteCounts.set(m.project, (projectVoteCounts.get(m.project) || 0) + m.weight * 3);
           }
         }
       }
@@ -455,9 +643,11 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
   const fallbackIso = stat.mtime.toISOString();
   return {
     conversationId,
+    parentConversationId,
     title: title || `Session ${conversationId.slice(0, 8)}`,
     project,
     model: detectedModel || "Gemini 2.5 Pro (Default)",
+    hasTokenTelemetry: totalTokens > 0,
     startedAt: startedAt || fallbackIso,
     updatedAt: updatedAt || fallbackIso,
     promptCount,
@@ -487,6 +677,10 @@ function buildUserSummary(userMeta, conversationsMap) {
   let totalSavedByCacheUsd = 0;
   let totalPrompts = 0;
   let totalTurns = 0;
+  let trackedTurns = 0;
+  let legacyTurnsPreTelemetry = 0;
+  let trackedConversations = 0;
+  let legacyConversationsPreTelemetry = 0;
   let totalToolCalls = 0;
   let totalSubagents = 0;
 
@@ -502,15 +696,29 @@ function buildUserSummary(userMeta, conversationsMap) {
     totalSavedByCacheUsd += conv.savedByCacheUsd || 0;
     totalPrompts += conv.promptCount;
     totalTurns += conv.turnCount;
+    if (conv.totalTokens > 0) {
+      trackedConversations += 1;
+      trackedTurns += conv.turnCount;
+    } else {
+      legacyConversationsPreTelemetry += 1;
+      legacyTurnsPreTelemetry += conv.turnCount;
+    }
     totalToolCalls += conv.toolCallCount;
     totalSubagents += conv.subagentCount || 0;
 
     const proj = conv.project || "general";
     if (!byProject[proj]) {
+      const repoMeta = resolveRepoMetadata(proj);
       byProject[proj] = {
         project: proj,
+        repoPath: repoMeta.repoPath,
+        gitRemote: repoMeta.gitRemote,
+        isGitRepo: repoMeta.isGitRepo,
         conversations: 0,
+        trackedConversations: 0,
+        legacyConversationsPreTelemetry: 0,
         turns: 0,
+        trackedTurns: 0,
         inputTokens: 0,
         cacheReadTokens: 0,
         outputTokens: 0,
@@ -520,6 +728,12 @@ function buildUserSummary(userMeta, conversationsMap) {
       };
     }
     byProject[proj].conversations += 1;
+    if (conv.totalTokens > 0) {
+      byProject[proj].trackedConversations += 1;
+      byProject[proj].trackedTurns += conv.turnCount;
+    } else {
+      byProject[proj].legacyConversationsPreTelemetry += 1;
+    }
     byProject[proj].turns += conv.turnCount;
     byProject[proj].inputTokens += conv.inputTokens;
     byProject[proj].cacheReadTokens += conv.cacheReadTokens;
@@ -552,6 +766,7 @@ function buildUserSummary(userMeta, conversationsMap) {
           model: mod,
           rates: mRates,
           conversations: 0,
+          trackedConversations: 0,
           turns: 0,
           inputTokens: 0,
           cacheReadTokens: 0,
@@ -562,11 +777,15 @@ function buildUserSummary(userMeta, conversationsMap) {
         };
       }
       byModel[mod].conversations += 1;
+      const mTotalTokens = (mData.inputTokens || 0) + (mData.cacheReadTokens || 0) + (mData.outputTokens || 0);
+      if (mTotalTokens > 0) {
+        byModel[mod].trackedConversations += 1;
+      }
       byModel[mod].turns += mData.turns || 0;
       byModel[mod].inputTokens += mData.inputTokens || 0;
       byModel[mod].cacheReadTokens += mData.cacheReadTokens || 0;
       byModel[mod].outputTokens += mData.outputTokens || 0;
-      byModel[mod].totalTokens += (mData.inputTokens || 0) + (mData.cacheReadTokens || 0) + (mData.outputTokens || 0);
+      byModel[mod].totalTokens += mTotalTokens;
       byModel[mod].estimatedCostUsd = Number(
         (byModel[mod].estimatedCostUsd + (mData.estimatedCostUsd || 0)).toFixed(6)
       );
@@ -612,6 +831,7 @@ function buildUserSummary(userMeta, conversationsMap) {
       model: "Claude Sonnet 5.5",
       rates: MODEL_PRICING_TABLE["Claude Sonnet 5.5"],
       conversations: 0,
+      trackedConversations: 0,
       turns: 0,
       inputTokens: 0,
       cacheReadTokens: 0,
@@ -628,14 +848,19 @@ function buildUserSummary(userMeta, conversationsMap) {
     totalContextTokens > 0 ? Number(((totalCacheReadTokens / totalContextTokens) * 100).toFixed(2)) : 0;
 
   return {
-    schemaVersion: "1.4.0",
+    schemaVersion: "1.5.0",
     lastSyncedAt: new Date().toISOString(),
+    telemetryStartDate: "2026-10-09",
     user: userMeta,
     pricingTable: MODEL_PRICING_TABLE,
     totals: {
       conversations: conversations.length,
+      trackedConversations,
+      legacyConversationsPreTelemetry,
       prompts: totalPrompts,
       turns: totalTurns,
+      trackedTurns,
+      legacyTurnsPreTelemetry,
       toolCalls: totalToolCalls,
       subagents: totalSubagents,
       inputTokens: totalInputTokens,
@@ -647,7 +872,7 @@ function buildUserSummary(userMeta, conversationsMap) {
       savedByCacheUsd: Number(totalSavedByCacheUsd.toFixed(2)),
     },
     daily: Object.values(daily).sort((a, b) => a.date.localeCompare(b.date)),
-    byProject: Object.values(byProject).sort((a, b) => b.totalTokens - a.totalTokens),
+    byProject: Object.values(byProject).sort((a, b) => b.totalTokens - a.totalTokens || b.turns - a.turns),
     byModel: Object.values(byModel).sort((a, b) => b.totalTokens - a.totalTokens || b.turns - a.turns),
     conversations,
   };
@@ -681,7 +906,41 @@ function writeUiBundle() {
   return bundlePayload;
 }
 
-export function runSync({ backfill = false, hookPayload = null, printSummary = false } = {}) {
+/**
+ * Optionally writes a per-repository `.gemini/token-usage.json` ledger inside each actual Git repository on disk.
+ */
+function writePerRepoReports(summary) {
+  const written = [];
+  for (const proj of summary.byProject) {
+    if (!proj.repoPath || !fs.existsSync(proj.repoPath)) continue;
+    try {
+      const repoGeminiDir = path.join(proj.repoPath, ".gemini");
+      fs.mkdirSync(repoGeminiDir, { recursive: true });
+      const repoConvs = summary.conversations.filter((c) => c.project === proj.project);
+      const reportPath = path.join(repoGeminiDir, "token-usage.json");
+      const payload = {
+        schemaVersion: "1.5.0",
+        generatedAt: new Date().toISOString(),
+        project: proj.project,
+        repoPath: proj.repoPath,
+        gitRemote: proj.gitRemote,
+        user: summary.user,
+        totals: proj,
+        conversations: repoConvs,
+      };
+      fs.writeFileSync(reportPath, JSON.stringify(payload, null, 2), "utf8");
+      written.push({ project: proj.project, reportPath });
+    } catch {}
+  }
+  return written;
+}
+
+export function runSync({
+  backfill = false,
+  hookPayload = null,
+  printSummary = false,
+  writeRepoReports = false,
+} = {}) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const userMeta = getUserIdentity();
   const userFilePath = path.join(DATA_DIR, `${userMeta.userId}.json`);
@@ -733,9 +992,20 @@ export function runSync({ backfill = false, hookPayload = null, printSummary = f
     }
   }
 
+  // Second pass: inherit repository from parent conversation for subagent sessions
+  for (const conv of Object.values(existingConversationsMap)) {
+    if (conv.project === "general" && conv.parentConversationId) {
+      const parent = existingConversationsMap[conv.parentConversationId];
+      if (parent && parent.project && parent.project !== "general") {
+        conv.project = parent.project;
+      }
+    }
+  }
+
   const summary = buildUserSummary(userMeta, existingConversationsMap);
   fs.writeFileSync(userFilePath, JSON.stringify(summary, null, 2), "utf8");
   const bundle = writeUiBundle();
+  const repoReports = writeRepoReports ? writePerRepoReports(summary) : [];
 
   if (printSummary) {
     console.log(
@@ -743,8 +1013,9 @@ export function runSync({ backfill = false, hookPayload = null, printSummary = f
         {
           user: summary.user,
           totals: summary.totals,
-          topProjects: summary.byProject.slice(0, 6),
+          topProjects: summary.byProject,
           models: summary.byModel,
+          repoReportsWritten: repoReports.length,
         },
         null,
         2
@@ -752,7 +1023,7 @@ export function runSync({ backfill = false, hookPayload = null, printSummary = f
     );
   }
 
-  return { summary, bundle };
+  return { summary, bundle, repoReports };
 }
 
 const isMain =
@@ -762,8 +1033,9 @@ if (isMain) {
   const args = process.argv.slice(2);
   const isBackfill = args.includes("--backfill");
   const isSummary = args.includes("--summary");
+  const isWriteRepoReports = args.includes("--write-repo-reports");
 
-  if (!process.stdin.isTTY && !isBackfill && !isSummary) {
+  if (!process.stdin.isTTY && !isBackfill && !isSummary && !isWriteRepoReports) {
     let inputData = "";
     process.stdin.setEncoding("utf8");
     process.stdin.on("data", (chunk) => {
@@ -782,6 +1054,10 @@ if (isMain) {
       process.stdout.write("{}\n");
     });
   } else {
-    runSync({ backfill: isBackfill || true, printSummary: isSummary });
+    runSync({
+      backfill: isBackfill || true,
+      printSummary: isSummary,
+      writeRepoReports: isWriteRepoReports,
+    });
   }
 }
