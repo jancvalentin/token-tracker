@@ -50,7 +50,7 @@
       margin-bottom: 16px;
     }
 
-    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .brand-icon {
       width: 38px;
       height: 38px;
@@ -64,6 +64,7 @@
       flex-shrink: 0;
     }
 
+    .title-group { min-width: 0; }
     .title-group h1 {
       font-size: 1.08rem;
       font-weight: 600;
@@ -74,7 +75,7 @@
 
     .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
-    button, select, .file-label {
+    button, select {
       background: var(--surface-hover);
       color: var(--text);
       border: 1px solid var(--border);
@@ -89,7 +90,7 @@
       white-space: nowrap;
       transition: all 0.15s ease;
     }
-    button:hover, select:hover, .file-label:hover {
+    button:hover, select:hover {
       background: #3c4043;
       border-color: var(--accent);
     }
@@ -100,14 +101,12 @@
     }
     button.primary:hover { background: #1b66c9; }
 
+    /* Auto-wrapping KPI cards: automatically flows to next row when card width would drop below 240px */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: 12px;
       margin-bottom: 16px;
-    }
-    @media (max-width: 780px) {
-      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     .kpi-card {
       background: var(--surface);
@@ -115,32 +114,36 @@
       border-radius: 8px;
       padding: 14px 16px;
       min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
     .kpi-header {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
+      gap: 10px;
       color: var(--muted);
       font-size: 0.7rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       font-weight: 600;
-      white-space: nowrap;
+      line-height: 1.3;
     }
     .kpi-value {
       font-size: 1.45rem;
       font-weight: 700;
-      margin-top: 6px;
+      margin-top: 8px;
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
     .kpi-sub {
       font-size: 0.74rem;
       color: var(--muted);
-      margin-top: 4px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      margin-top: 6px;
+      line-height: 1.35;
+      white-space: normal;
+      word-break: break-word;
     }
 
     .panel {
@@ -170,10 +173,10 @@
       color: var(--text);
     }
 
-    /* Horizontal Repository Cards Strip */
+    /* Responsive Repository Cards Grid */
     .repo-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
       gap: 10px;
       width: 100%;
     }
@@ -181,22 +184,29 @@
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 10px 12px;
+      padding: 11px 13px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 8px;
       min-width: 0;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .repo-card:hover {
+      border-color: var(--accent);
     }
     .repo-card-top {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 8px;
+      flex-wrap: wrap;
     }
     .repo-card-bottom {
       display: flex;
       align-items: baseline;
       justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
       font-size: 0.75rem;
       color: var(--muted);
       font-variant-numeric: tabular-nums;
@@ -239,14 +249,11 @@
       font-size: 0.78rem;
       table-layout: auto;
     }
-    #teamTable {
-      min-width: 860px;
-    }
     #modelTable {
-      min-width: 860px;
+      min-width: 820px;
     }
     #convTable {
-      min-width: 820px;
+      min-width: 740px;
     }
     th, td {
       padding: 9px 12px;
@@ -274,8 +281,8 @@
 
     /* Title cell with comfortable min and max width inside scrollable table */
     td.cell-expand {
-      min-width: 220px;
-      max-width: 380px;
+      min-width: 240px;
+      max-width: 420px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -339,7 +346,7 @@
     }
     .bar-col {
       flex: 1;
-      min-width: 20px;
+      min-width: 24px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -389,6 +396,7 @@
       border-radius: 6px;
       font-size: 0.78rem;
       width: 240px;
+      max-width: 100%;
     }
     .search-input:focus {
       outline: none;
@@ -418,19 +426,24 @@
           </svg>
         </div>
         <div class="title-group">
-          <h1>Antigravity Team Token Tracker</h1>
-          <p id="subtitleText">Per-model Gemini 3.x Flash, Pro &amp; Claude Opus/Sonnet 5.5 pricing • Local JSON storage</p>
+          <h1>Antigravity Token Tracker</h1>
+          <p id="subtitleText">Per-model Gemini 3.x Flash, Pro &amp; Claude Opus/Sonnet 5.5 pricing • Local usage &amp; spend analytics</p>
         </div>
       </div>
 
       <div class="controls">
-        <select id="userFilter" title="Filter by Developer">
-          <option value="all">All Team Members</option>
-        </select>
-
         <select id="projectFilter" title="Filter by Repository">
           <option value="all">All Repositories</option>
         </select>
+
+        <button id="exportBtn" title="Download aggregated token &amp; spend numbers as JSON (no chat titles or prompts)">
+          <svg class="icon-svg" viewBox="0 0 24 24">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Export Metrics JSON</span>
+        </button>
 
         <button class="primary" id="syncBtn">
           <svg class="icon-svg" viewBox="0 0 24 24">
@@ -440,16 +453,6 @@
           </svg>
           <span>Rescan Local Transcripts</span>
         </button>
-
-        <label class="file-label">
-          <svg class="icon-svg" viewBox="0 0 24 24">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="17 8 12 3 7 8"></polyline>
-            <line x1="12" y1="3" x2="12" y2="15"></line>
-          </svg>
-          <span>Import Teammate JSON</span>
-          <input type="file" id="importInput" accept=".json" style="display:none" />
-        </label>
       </div>
     </header>
 
@@ -502,42 +505,7 @@
       </div>
     </div>
 
-    <!-- Team Comparison Leaderboard (Full-Width Horizontal Card) -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title-wrap">
-          <svg class="icon-svg" style="color:var(--accent)" viewBox="0 0 24 24">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-            <circle cx="9" cy="7" r="4"></circle>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-          </svg>
-          <span class="panel-title">Team Comparison Leaderboard</span>
-        </div>
-        <span style="font-size: 0.74rem; color: var(--muted);">Stored in <code>data/users/&lt;user&gt;.json</code></span>
-      </div>
-      <div class="table-wrap" tabindex="0" role="region" aria-label="Team Comparison Leaderboard">
-        <table id="teamTable">
-          <thead>
-            <tr>
-              <th>Developer</th>
-              <th class="num">Sessions</th>
-              <th class="num">Prompts / Turns</th>
-              <th class="num">Uncached In</th>
-              <th class="num">Cache Read</th>
-              <th class="num">Output</th>
-              <th class="num">Total Tokens</th>
-              <th class="num">Cache Hit %</th>
-              <th class="num">Saved by Cache</th>
-              <th class="num">Actual Spend</th>
-            </tr>
-          </thead>
-          <tbody id="teamTableBody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Daily Token Activity (Full-Width Horizontal Card) -->
+    <!-- Daily Token Activity -->
     <div class="panel">
       <div class="panel-header">
         <div class="panel-title-wrap">
@@ -558,7 +526,7 @@
       </div>
     </div>
 
-    <!-- Model Pricing & Breakdown (Full-Width Horizontal Card, Horizontally Scrollable) -->
+    <!-- Model Pricing & Breakdown -->
     <div class="panel">
       <div class="panel-header">
         <div class="panel-title-wrap">
@@ -591,7 +559,7 @@
       </div>
     </div>
 
-    <!-- Usage by Repository (Horizontal Expanding Cards Grid, No Vertical Clipping) -->
+    <!-- Usage by Repository -->
     <div class="panel">
       <div class="panel-header">
         <div class="panel-title-wrap">
@@ -605,7 +573,7 @@
       <div class="repo-grid" id="projectGrid"></div>
     </div>
 
-    <!-- Recent Conversations Ledger (Full-Width Horizontal Table, Horizontally Scrollable) -->
+    <!-- Recent Conversations Ledger -->
     <div class="panel">
       <div class="panel-header">
         <div class="panel-title-wrap">
@@ -622,7 +590,6 @@
           <thead>
             <tr>
               <th>Date</th>
-              <th>Developer</th>
               <th>Repository</th>
               <th>Conversation Prompt / Title</th>
               <th>Model</th>
@@ -641,9 +608,9 @@
   <script>
     let state = {
       users: [],
-      selectedUser: "all",
       selectedProject: "all",
       searchQuery: "",
+      lastComputedMetrics: null,
     };
 
     function getModelRatesObj(mod) {
@@ -722,19 +689,11 @@
     }
 
     function populateFilters() {
-      const userSelect = document.getElementById("userFilter");
       const projSelect = document.getElementById("projectFilter");
-      const currentUser = userSelect.value;
       const currentProj = projSelect.value;
-
-      userSelect.innerHTML = `<option value="all">All Team Members (${state.users.length})</option>`;
       const projects = new Set();
 
       for (const u of state.users) {
-        const opt = document.createElement("option");
-        opt.value = u.user.userId;
-        opt.textContent = `${u.user.displayName} (${u.user.userId})`;
-        userSelect.appendChild(opt);
         for (const p of u.byProject || []) {
           projects.add(p.project);
         }
@@ -748,8 +707,9 @@
         projSelect.appendChild(opt);
       }
 
-      if ([...userSelect.options].some((o) => o.value === currentUser)) userSelect.value = currentUser;
-      if ([...projSelect.options].some((o) => o.value === currentProj)) projSelect.value = currentProj;
+      if ([...projSelect.options].some((o) => o.value === currentProj)) {
+        projSelect.value = currentProj;
+      }
     }
 
     function selectRepoFilter(proj) {
@@ -760,13 +720,9 @@
     }
 
     function render() {
-      const filteredUsers =
-        state.selectedUser === "all"
-          ? state.users
-          : state.users.filter((u) => u.user.userId === state.selectedUser);
-
+      const primaryUser = state.users[0]?.user || { userId: "local", displayName: "Developer" };
       const allConvs = [];
-      for (const u of filteredUsers) {
+      for (const u of state.users) {
         for (const c of u.conversations || []) {
           if (state.selectedProject !== "all" && c.project !== state.selectedProject) continue;
           if (state.searchQuery) {
@@ -776,20 +732,42 @@
             const matchModel = (c.model || "").toLowerCase().includes(q);
             if (!matchTitle && !matchProj && !matchModel) continue;
           }
-          allConvs.push({ ...c, user: u.user });
+          allConvs.push(c);
         }
       }
 
       allConvs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
-      let inputTokens = 0, cacheReadTokens = 0, outputTokens = 0, prompts = 0, turns = 0, cost = 0, savedByCache = 0;
+      let inputTokens = 0,
+        cacheReadTokens = 0,
+        outputTokens = 0,
+        prompts = 0,
+        turns = 0,
+        trackedTurns = 0,
+        legacyTurnsPreTelemetry = 0,
+        trackedConversations = 0,
+        legacyConversationsPreTelemetry = 0,
+        toolCalls = 0,
+        subagents = 0,
+        cost = 0,
+        savedByCache = 0;
 
       for (const c of allConvs) {
+        const cTot = (c.inputTokens || 0) + (c.cacheReadTokens || 0) + (c.outputTokens || 0);
         inputTokens += c.inputTokens || 0;
         cacheReadTokens += c.cacheReadTokens || 0;
         outputTokens += c.outputTokens || 0;
         prompts += c.promptCount || 0;
         turns += c.turnCount || 0;
+        if (cTot > 0) {
+          trackedConversations += 1;
+          trackedTurns += c.turnCount || 0;
+        } else {
+          legacyConversationsPreTelemetry += 1;
+          legacyTurnsPreTelemetry += c.turnCount || 0;
+        }
+        toolCalls += c.toolCallCount || 0;
+        subagents += c.subagentCount || 0;
         cost += c.estimatedCostUsd || 0;
         savedByCache += c.savedByCacheUsd || 0;
       }
@@ -797,51 +775,99 @@
       const totalTokens = inputTokens + cacheReadTokens + outputTokens;
       const cacheHitPct =
         inputTokens + cacheReadTokens > 0
-          ? ((cacheReadTokens / (inputTokens + cacheReadTokens)) * 100).toFixed(2)
-          : "0.00";
+          ? Number(((cacheReadTokens / (inputTokens + cacheReadTokens)) * 100).toFixed(2))
+          : 0;
 
       document.getElementById("kpiTotalTokens").textContent = fmtCompact(totalTokens);
       document.getElementById("kpiTokenSplit").textContent =
         `${fmtCompact(inputTokens)} in • ${fmtCompact(cacheReadTokens)} cached • ${fmtCompact(outputTokens)} out`;
       document.getElementById("kpiCost").textContent = fmtUsd(cost);
       document.getElementById("kpiCostSub").textContent =
-        `${fmtUsd(allConvs.length ? cost / allConvs.length : 0)} avg per conversation`;
-      document.getElementById("kpiCacheRate").textContent = `${cacheHitPct}%`;
+        `${fmtUsd(trackedConversations ? cost / trackedConversations : 0)} avg per tracked session (${trackedConversations} tracked)`;
+      document.getElementById("kpiCacheRate").textContent = `${cacheHitPct.toFixed(2)}%`;
       document.getElementById("kpiCacheSaved").textContent = `Est. ${fmtUsd(savedByCache)} saved via cache discount`;
       document.getElementById("kpiSessions").textContent = fmtNum(allConvs.length);
       document.getElementById("kpiTurns").textContent = `${fmtNum(prompts)} prompts • ${fmtNum(turns)} turns`;
 
-      renderTeamTable();
-      renderDailyChart(allConvs);
-      renderModelAndProjectTables(allConvs);
+      const dailySeries = renderDailyChart(allConvs);
+      const { modRows, projRows } = renderModelAndProjectTables(allConvs);
       renderConversationsTable(allConvs.slice(0, 80));
-    }
 
-    function renderTeamTable() {
-      const tbody = document.getElementById("teamTableBody");
-      const rows = [...state.users].sort((a, b) => (b.totals?.totalTokens || 0) - (a.totals?.totalTokens || 0));
-      tbody.innerHTML = rows
-        .map((u) => {
-          const t = u.totals || {};
-          return `
-            <tr>
-              <td>
-                <strong>${u.user.displayName}</strong>
-                <span class="badge badge-green" style="margin-left:6px;">@${u.user.userId}</span>
-              </td>
-              <td class="num">${fmtNum(t.conversations)}</td>
-              <td class="num">${fmtNum(t.prompts)} / ${fmtNum(t.turns)}</td>
-              <td class="num">${fmtCompact(t.inputTokens)}</td>
-              <td class="num" style="color:var(--green);">${fmtCompact(t.cacheReadTokens)}</td>
-              <td class="num">${fmtCompact(t.outputTokens)}</td>
-              <td class="num"><strong>${fmtCompact(t.totalTokens)}</strong></td>
-              <td class="num" style="color:var(--accent);">${t.cacheHitRatePct || 0}%</td>
-              <td class="num" style="color:var(--muted);">${fmtUsd(t.savedByCacheUsd || 0)}</td>
-              <td class="num" style="color:var(--green);"><strong>${fmtUsd(t.estimatedCostUsd)}</strong></td>
-            </tr>
-          `;
-        })
-        .join("");
+      // Build numbers-only export payload (strictly zero chat titles, prompts, or local paths)
+      state.lastComputedMetrics = {
+        schemaVersion: "2.0.0",
+        exportedAt: new Date().toISOString(),
+        telemetryStartDate: "2026-10-09",
+        filter: {
+          repository: state.selectedProject,
+        },
+        developer: {
+          userId: primaryUser.userId,
+          displayName: primaryUser.displayName,
+        },
+        totals: {
+          conversations: allConvs.length,
+          trackedConversations,
+          legacyConversationsPreTelemetry,
+          prompts,
+          turns,
+          trackedTurns,
+          legacyTurnsPreTelemetry,
+          toolCalls,
+          subagents,
+          inputTokens,
+          cacheReadTokens,
+          outputTokens,
+          totalTokens,
+          cacheHitRatePct: cacheHitPct,
+          estimatedCostUsd: Number(cost.toFixed(2)),
+          savedByCacheUsd: Number(savedByCache.toFixed(2)),
+        },
+        byRepository: projRows.map((p) => ({
+          repository: p.project,
+          conversations: p.sessions,
+          trackedConversations: p.trackedSessions,
+          legacyConversationsPreTelemetry: p.legacySessions,
+          turns: p.turns,
+          trackedTurns: p.trackedTurns,
+          inputTokens: p.inT,
+          cacheReadTokens: p.cacheT,
+          outputTokens: p.outT,
+          totalTokens: p.tokens,
+          estimatedCostUsd: Number(p.cost.toFixed(4)),
+          savedByCacheUsd: Number(p.saved.toFixed(4)),
+        })),
+        byModel: modRows.map((m) => {
+          const r = getModelRatesObj(m.model);
+          return {
+            model: m.model,
+            tier: r.tier,
+            ratesPerMillionUsd: {
+              input: r.in,
+              cacheRead: r.cache,
+              output: r.out,
+            },
+            turns: m.turns,
+            inputTokens: m.inT,
+            cacheReadTokens: m.cacheT,
+            outputTokens: m.outT,
+            totalTokens: m.tokens,
+            estimatedCostUsd: Number(m.cost.toFixed(4)),
+            savedByCacheUsd: Number(m.saved.toFixed(4)),
+          };
+        }),
+        daily: dailySeries.map((d) => ({
+          date: d.date,
+          turns: d.turns,
+          toolCalls: d.toolCalls,
+          inputTokens: d.input,
+          cacheReadTokens: d.cache,
+          outputTokens: d.output,
+          totalTokens: d.input + d.cache + d.output,
+          estimatedCostUsd: Number(d.cost.toFixed(4)),
+          savedByCacheUsd: Number(d.saved.toFixed(4)),
+        })),
+      };
     }
 
     function renderDailyChart(convs) {
@@ -849,24 +875,27 @@
       for (const c of convs) {
         for (const [date, d] of Object.entries(c.byDate || {})) {
           if (!dailyMap[date]) {
-            dailyMap[date] = { date, input: 0, cache: 0, output: 0, cost: 0 };
+            dailyMap[date] = { date, turns: 0, toolCalls: 0, input: 0, cache: 0, output: 0, cost: 0, saved: 0 };
           }
+          dailyMap[date].turns += d.turns || 0;
+          dailyMap[date].toolCalls += d.toolCalls || 0;
           dailyMap[date].input += d.inputTokens || 0;
           dailyMap[date].cache += d.cacheReadTokens || 0;
           dailyMap[date].output += d.outputTokens || 0;
           dailyMap[date].cost += d.estimatedCostUsd || 0;
+          dailyMap[date].saved += d.savedByCacheUsd || 0;
         }
       }
 
-      const days = Object.values(dailyMap)
+      const allDays = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
+      const days = allDays
         .filter((d) => d.input + d.cache + d.output > 0)
-        .sort((a, b) => a.date.localeCompare(b.date))
         .slice(-21);
 
       const container = document.getElementById("dailyChart");
       if (days.length === 0) {
         container.innerHTML = `<div style="color:var(--muted);margin:auto;">No token telemetry for selected filter</div>`;
-        return;
+        return allDays;
       }
 
       const maxTot = Math.max(...days.map((d) => d.input + d.cache + d.output), 1);
@@ -889,6 +918,7 @@
           `;
         })
         .join("");
+      return allDays;
     }
 
     function renderModelAndProjectTables(convs) {
@@ -923,10 +953,35 @@
         }
 
         const p = c.project || "general";
-        if (!byProj[p]) byProj[p] = { project: p, sessions: 0, turns: 0, tokens: 0, cost: 0 };
+        if (!byProj[p]) {
+          byProj[p] = {
+            project: p,
+            sessions: 0,
+            trackedSessions: 0,
+            legacySessions: 0,
+            turns: 0,
+            trackedTurns: 0,
+            inT: 0,
+            cacheT: 0,
+            outT: 0,
+            tokens: 0,
+            saved: 0,
+            cost: 0,
+          };
+        }
         byProj[p].sessions += 1;
         byProj[p].turns += c.turnCount || 0;
+        if ((c.totalTokens || 0) > 0) {
+          byProj[p].trackedSessions += 1;
+          byProj[p].trackedTurns += c.turnCount || 0;
+        } else {
+          byProj[p].legacySessions += 1;
+        }
+        byProj[p].inT += c.inputTokens || 0;
+        byProj[p].cacheT += c.cacheReadTokens || 0;
+        byProj[p].outT += c.outputTokens || 0;
         byProj[p].tokens += c.totalTokens || 0;
+        byProj[p].saved += c.savedByCacheUsd || 0;
         byProj[p].cost += c.estimatedCostUsd || 0;
       }
 
@@ -975,6 +1030,8 @@
           `;
         })
         .join("");
+
+      return { modRows, projRows };
     }
 
     function renderConversationsTable(convs) {
@@ -987,7 +1044,6 @@
           return `
             <tr>
               <td style="color:var(--muted);">${dateStr}</td>
-              <td><span class="badge badge-green">${c.user.displayName}</span></td>
               <td><span class="badge">${c.project}</span></td>
               <td class="cell-expand" title="${(c.title || "").replace(/"/g, "&quot;")}">
                 ${c.title}
@@ -1002,11 +1058,6 @@
         .join("");
     }
 
-    document.getElementById("userFilter").addEventListener("change", (e) => {
-      state.selectedUser = e.target.value;
-      render();
-    });
-
     document.getElementById("projectFilter").addEventListener("change", (e) => {
       state.selectedProject = e.target.value;
       render();
@@ -1017,6 +1068,23 @@
       render();
     });
 
+    document.getElementById("exportBtn").addEventListener("click", () => {
+      if (!state.lastComputedMetrics) return;
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const repoSuffix = state.selectedProject !== "all" ? `-${state.selectedProject}` : "";
+      const filename = `token-tracker-metrics${repoSuffix}-${dateStamp}.json`;
+      const jsonStr = JSON.stringify(state.lastComputedMetrics, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+
     document.getElementById("syncBtn").addEventListener("click", async () => {
       const btn = document.getElementById("syncBtn");
       const origHtml = btn.innerHTML;
@@ -1025,34 +1093,15 @@
         const res = await apiFetch("api/sync", { method: "POST" });
         if (res.ok) {
           const payload = await res.json();
-          if (payload.bundle && Array.isArray(payload.bundle.users)) {
-            state.users = payload.bundle.users;
+          const users = payload.users || payload.bundle?.users;
+          if (Array.isArray(users)) {
+            state.users = users;
             populateFilters();
             render();
           }
         }
       } catch {}
       btn.innerHTML = origHtml;
-    });
-
-    document.getElementById("importInput").addEventListener("change", async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      try {
-        const text = await file.text();
-        const json = JSON.parse(text);
-        const importedUsers = Array.isArray(json.users) ? json.users : [json];
-        for (const iu of importedUsers) {
-          if (!iu.user || !iu.user.userId) continue;
-          const idx = state.users.findIndex((u) => u.user.userId === iu.user.userId);
-          if (idx >= 0) state.users[idx] = iu;
-          else state.users.push(iu);
-        }
-        populateFilters();
-        render();
-      } catch (err) {
-        alert("Failed to import JSON file: " + err.message);
-      }
     });
 
     loadData();

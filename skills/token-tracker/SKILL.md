@@ -1,9 +1,9 @@
 ---
 name: token-tracker
-description: Syncs, backfills, analyzes, and visualizes token spending (input, cache read, and output tokens) across historical and live Antigravity transcripts, and launches the local Team Token Tracker UI. Activate when the user asks about token usage, model spend, cache efficiency, or comparing token stats across repositories or teammates.
+description: Syncs, backfills, analyzes, and visualizes token spending (input, cache read, and output tokens) across historical and live Antigravity transcripts, exports numbers-only JSON telemetry, and launches the local Token Tracker UI. Activate when the user asks about token usage, model spend, cache efficiency, or repository token breakdowns.
 ---
 
-# Token Tracker & Team Usage Skill
+# Token Tracker & Spend Analytics Skill
 
 This skill powers the `token-tracker` plugin (`~/.gemini/config/plugins/token-tracker`).
 
@@ -14,10 +14,9 @@ This skill powers the `token-tracker` plugin (`~/.gemini/config/plugins/token-tr
    - Fires automatically at the end of every agent loop (`Stop`), reading the conversation's `transcript.jsonl` and updating `data/users/<userId>.json` + `ui/data-bundle.js`.
 2. **Full Historical Backfill (`--backfill`)**:
    - Scans every existing conversation directory under `~/.gemini/antigravity/brain/<conversationId>/.system_generated/logs/transcript.jsonl`.
-   - Extracts `input_tokens`, `cache_read_tokens`, `output_tokens`, prompt count, model turns, tool call counts, model name, and repository/project name.
-3. **Team Comparison & Small UI Dashboard**:
-   - Stores each team member's telemetry in their own conflict-free file: `data/users/<userId>.json`.
-   - Teammates can commit and push their `data/users/<userId>.json` file to the repo (or export/import via the UI) to compare usage side-by-side.
+   - Extracts `input_tokens`, `cache_read_tokens`, `output_tokens`, prompt count, model turns, tool call counts, model name, and resolves the actual Git repository name.
+3. **Numbers-Only JSON Metrics Export**:
+   - The dashboard includes an **Export Metrics JSON** button that downloads `token-tracker-metrics-YYYY-MM-DD.json` containing strictly aggregated numeric metrics (`totals`, `byRepository`, `byModel`, `daily`) with zero chat titles, prompts, or local file paths so it can be safely imported into external apps.
 
 ## 2. Commands
 
