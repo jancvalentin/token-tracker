@@ -2,3 +2,5 @@ node_modules/
 .DS_Store
 *.log
 user.config.json
+data/users/*.json
+ui/data-bundle.js
