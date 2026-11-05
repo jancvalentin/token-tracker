@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { exec } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { runSync, MODEL_PRICING_TABLE } from "./sync-tokens.mjs";
+import { runSync, MODEL_PRICING_TABLE, loadUniqueUserProfiles } from "./sync-tokens.mjs";
+import {
+  analyzePromptEffectiveness,
+  computeRepositoryBaselines,
+  runPromptEffectivenessAudit,
+} from "./analyze-prompt.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,14 +25,7 @@ const FALLBACK_PORT = Number(process.env.PORT || 4321);
 const PRIMARY_PORT = SIDECAR_PORT || FALLBACK_PORT;
 
 function loadAllUsers() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  const files = fs.readdirSync(DATA_DIR).filter((f) => f.endsWith(".json"));
-  const users = [];
-  for (const f of files) {
-    try {
-      users.push(JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), "utf8")));
-    } catch {}
-  }
+  const users = loadUniqueUserProfiles();
   return {
     generatedAt: new Date().toISOString(),
     pricingTable: MODEL_PRICING_TABLE,
@@ -203,6 +201,51 @@ function handleRequest(req, res) {
       res.end(JSON.stringify({ error: err.message }));
     }
     return;
+  }
+
+  // Match /api/analyze-prompt (POST for single historical or draft prompt, GET for portfolio summary)
+  if (url.pathname === "/api/analyze-prompt" || url.pathname.endsWith("/api/analyze-prompt")) {
+    if (req.method === "GET") {
+      try {
+        const project = url.searchParams.get("project") || "all";
+        const conversationId = url.searchParams.get("conversationId") || null;
+        const promptIndex = url.searchParams.get("promptIndex") || null;
+        const result = runPromptEffectivenessAudit({ project, conversationId, promptIndex });
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(result));
+      } catch (err) {
+        res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    if (req.method === "POST") {
+      let body = "";
+      req.setEncoding("utf8");
+      req.on("data", (chunk) => {
+        if (body.length < 100_000) body += chunk;
+      });
+      req.on("end", () => {
+        try {
+          const parsedBody = body ? JSON.parse(body) : {};
+          const payload = loadAllUsers();
+          const allConvs = payload.users?.[0]?.conversations || [];
+          const baselines = computeRepositoryBaselines(allConvs, parsedBody.project || "all");
+          const analysis = analyzePromptEffectiveness(parsedBody.prompt || parsedBody, {
+            project: parsedBody.project || "general",
+            model: parsedBody.model,
+            baselines,
+          });
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ baselines, analysis }));
+        } catch (err) {
+          res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
   }
 
   // Serve data-bundle.js directly with live data

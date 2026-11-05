@@ -16,7 +16,10 @@ An Antigravity plugin and local developer dashboard that tracks **uncached input
    - Bundles `hooks.json` with a `Stop` hook that updates your usage ledger automatically at the end of each agent turn.
 4. **Numbers-Only JSON Metrics Exporter**
    - Click **Export Metrics JSON** in the dashboard to download a clean `token-tracker-metrics-YYYY-MM-DD.json` file containing only aggregated numbers (`totals`, `byRepository`, `byModel`, `daily` time-series, and anonymized `conversationsNumeric` with nested prompt/turn metrics) with zero chat titles, prompts, or local filesystem paths—ready to import into any external analytics or billing app.
-5. **Lightweight Local & In-App Sidecar UI (`ui/index.html` + `scripts/ui-server.mjs`)**
+5. **Prompt Effectiveness Analyzer & Sandbox (`skills/prompt-effectiveness/SKILL.md` + `scripts/analyze-prompt.mjs`)**
+   - Every prompt in the **Conversation Ledger** displays an inline **0–100 Prompt Effectiveness Score (`A+` to `D`)** and a **★ Analyze** button.
+   - Clicking **★ Analyze** on any historical prompt—or clicking **Prompt Effectiveness Lab** in the header—opens an interactive scorecard evaluating **Execution Efficiency (40 pts)**, **Clarity & Grounding (35 pts)**, and **Context & Scope Fit (25 pts)**, complete with a **Suggested High-Effectiveness Prompt Rewrite** and a 1-click **Copy Chat Skill Command (`/prompt-effectiveness`)** button.
+6. **Lightweight Local & In-App Sidecar UI (`ui/index.html` + `scripts/ui-server.mjs`)**
    - Zero external npm dependencies required; responsive KPI cards and accessible horizontally scrollable tables.
    - View **Daily Token Activity**, **Cache Hit Efficiency & Savings**, **Model Pricing & Spend Breakdown**, **Per-Repository Breakdown**, and a **3-Level Expandable Conversation Ledger** (Conversation → Prompts → Chronological Turns with Subagent badges).
 

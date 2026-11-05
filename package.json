@@ -8,6 +8,6 @@
     "start": "node ./scripts/ui-server.mjs",
     "ui": "node ./scripts/sync-tokens.mjs --backfill && node ./scripts/ui-server.mjs",
     "stats": "node ./scripts/sync-tokens.mjs --backfill --summary",
-    "export:repos": "node ./scripts/sync-tokens.mjs --backfill --write-repo-reports --summary"
+    "analyze": "node ./scripts/analyze-prompt.mjs"
   }
 }

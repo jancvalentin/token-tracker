@@ -170,6 +170,14 @@ export function computeStepCostUsd(inputTokens, cacheReadTokens, outputTokens, m
   };
 }
 
+/**
+ * Resolves the local developer identity consistently across sandboxed and unsandboxed runs.
+ * Prefers `user.config.json`, then OS username (`os.userInfo().username`), so that the
+ * profile filename (`data/users/<userId>.json`) never splits into duplicate files when
+ * `git config` is inaccessible inside a sandboxed environment.
+ *
+ * @returns {{ userId: string, displayName: string, email: string, hostname: string }}
+ */
 function getUserIdentity() {
   const cfgPath = path.join(PLUGIN_ROOT, "user.config.json");
   if (fs.existsSync(cfgPath)) {
@@ -201,12 +209,12 @@ function getUserIdentity() {
 
   const username = os.userInfo().username || "developer";
   const displayName = name || username;
-  const slug = (email ? email.split("@")[0] : username)
+  const slug = username
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, "-");
 
   return {
-    userId: slug || username.toLowerCase(),
+    userId: slug || "developer",
     displayName,
     email: email || `${username}@local`,
     hostname: os.hostname(),
@@ -513,8 +521,8 @@ function extractConfiguredProjectsFromText(text) {
   return results;
 }
 
-function cleanUserPromptTitle(rawContent) {
-  if (!rawContent) return "Untitled Conversation";
+function extractUserPromptFullText(rawContent) {
+  if (!rawContent) return "";
   let text = rawContent;
   const reqMatch = text.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/);
   if (reqMatch) {
@@ -526,11 +534,23 @@ function cleanUserPromptTitle(rawContent) {
     }
   }
   text = text
+    .replace(/<ADDITIONAL_METADATA>[\s\S]*?<\/ADDITIONAL_METADATA>/g, "")
+    .replace(/<USER_SETTINGS_CHANGE>[\s\S]*?<\/USER_SETTINGS_CHANGE>/g, "")
+    .replace(/<SYSTEM_MESSAGE>[\s\S]*?<\/SYSTEM_MESSAGE>/g, "")
+    .trim();
+  if (!text) return "";
+  return text.length > 2000 ? text.slice(0, 2000) : text;
+}
+
+function cleanUserPromptTitle(rawContent) {
+  const full = extractUserPromptFullText(rawContent);
+  if (!full) return "Untitled Conversation";
+  const singleLine = full
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  if (!text) return "Untitled Conversation";
-  return text.length > 90 ? text.slice(0, 87) + "..." : text;
+  if (!singleLine) return "Untitled Conversation";
+  return singleLine.length > 90 ? singleLine.slice(0, 87) + "..." : singleLine;
 }
 
 function normalizeModelName(rawModel) {
@@ -713,6 +733,8 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
 
     if (step.type === "USER_INPUT") {
       promptCount++;
+      const promptFullText =
+        typeof step.content === "string" ? extractUserPromptFullText(step.content) : "";
       const promptPreview =
         typeof step.content === "string"
           ? cleanUserPromptTitle(step.content)
@@ -731,6 +753,7 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
         stepIndex: step.step_index ?? lineIdx,
         timestamp: stepTime || startedAt || fallbackIso,
         preview: promptPreview,
+        text: promptFullText || promptPreview,
         model: currentModel,
         turnCount: 0,
         subagentTurnCount: 0,
@@ -1546,18 +1569,74 @@ function buildUserSummary(userMeta, conversationsMap) {
   };
 }
 
-function writeUiBundle() {
+/**
+ * Loads all user profile JSON files from `data/users`, deduplicating by conversation overlap
+ * or machine hostname so legacy duplicate identity files (e.g. `jan-valentin.json` vs `jancvalentin.json`)
+ * are never summed twice by the UI.
+ *
+ * @param {string} [primaryUserId] - Canonical userId for the active developer
+ * @returns {object[]} Array of unique user summary objects
+ */
+export function loadUniqueUserProfiles(primaryUserId = null) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const files = fs.readdirSync(DATA_DIR).filter((f) => f.endsWith(".json"));
+  const parsedProfiles = [];
+
+  for (const file of files) {
+    try {
+      const fullPath = path.join(DATA_DIR, file);
+      const raw = fs.readFileSync(fullPath, "utf8");
+      const data = JSON.parse(raw);
+      if (data && typeof data === "object") {
+        parsedProfiles.push({ file, fullPath, data });
+      }
+    } catch {}
+  }
+
+  // Sort so primaryUserId comes first, then most recently synced
+  parsedProfiles.sort((a, b) => {
+    if (primaryUserId) {
+      const aIsPrimary = a.data.user?.userId === primaryUserId;
+      const bIsPrimary = b.data.user?.userId === primaryUserId;
+      if (aIsPrimary !== bIsPrimary) return aIsPrimary ? -1 : 1;
+    }
+    return (
+      new Date(b.data.lastSyncedAt || 0).getTime() -
+      new Date(a.data.lastSyncedAt || 0).getTime()
+    );
+  });
+
+  const uniqueUsers = [];
+  const seenConversationIds = new Set();
+
+  for (const item of parsedProfiles) {
+    const convs = Array.isArray(item.data.conversations) ? item.data.conversations : [];
+    const hasOverlappingConv = convs.some(
+      (c) => c.conversationId && seenConversationIds.has(c.conversationId)
+    );
+    if (hasOverlappingConv) {
+      // Remove stale duplicate identity file created under an alternative slug
+      if (primaryUserId && item.data.user?.userId !== primaryUserId) {
+        try {
+          fs.unlinkSync(item.fullPath);
+        } catch {}
+      }
+      continue;
+    }
+    for (const c of convs) {
+      if (c.conversationId) seenConversationIds.add(c.conversationId);
+    }
+    uniqueUsers.push(item.data);
+  }
+
+  return uniqueUsers;
+}
+
+function writeUiBundle(primaryUserId = null) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.mkdirSync(UI_DIR, { recursive: true });
 
-  const files = fs.readdirSync(DATA_DIR).filter((f) => f.endsWith(".json"));
-  const users = [];
-  for (const file of files) {
-    try {
-      const raw = fs.readFileSync(path.join(DATA_DIR, file), "utf8");
-      users.push(JSON.parse(raw));
-    } catch {}
-  }
+  const users = loadUniqueUserProfiles(primaryUserId);
 
   const bundlePayload = {
     generatedAt: new Date().toISOString(),
@@ -1572,6 +1651,37 @@ function writeUiBundle() {
     "utf8"
   );
   return bundlePayload;
+}
+
+/**
+ * Helper to parse a single conversation transcript from disk by ID across configured BRAIN_DIRS.
+ *
+ * @param {string} convId - Conversation UUID
+ * @param {object} [metaOverride={}] - Optional metadata override
+ * @returns {object|null} Parsed conversation object or null
+ */
+function parseConversationByIdFromDisk(convId, metaOverride = {}) {
+  if (!convId) return null;
+  for (const b of BRAIN_DIRS) {
+    const tPath = path.join(
+      b.path,
+      convId,
+      ".system_generated",
+      "logs",
+      "transcript.jsonl"
+    );
+    if (fs.existsSync(tPath)) {
+      const parsed = parseTranscriptFile(tPath, convId, {
+        surface: b.surface,
+        ...metaOverride,
+      });
+      if (parsed) return parsed;
+    }
+  }
+  if (metaOverride.transcriptPath && fs.existsSync(metaOverride.transcriptPath)) {
+    return parseTranscriptFile(metaOverride.transcriptPath, convId, metaOverride);
+  }
+  return null;
 }
 
 export function runSync({
@@ -1625,77 +1735,65 @@ export function runSync({
 
   if (hookPayload && hookPayload.conversationId) {
     const convId = hookPayload.conversationId;
-    const candidatePaths = [
-      ...BRAIN_DIRS.map((b) =>
-        path.join(b.path, convId, ".system_generated", "logs", "transcript.jsonl")
-      ),
-      hookPayload.transcriptPath,
-    ].filter(Boolean);
+    const prevCachedEntry = existingConversationsMap[convId] || null;
+    const prevMergedChildIds = Array.isArray(prevCachedEntry?.mergedSubagents)
+      ? prevCachedEntry.mergedSubagents.map((s) => s.conversationId).filter(Boolean)
+      : [];
 
-    for (const tPath of candidatePaths) {
-      if (fs.existsSync(tPath)) {
-        const parsed = parseTranscriptFile(tPath, convId, hookPayload);
-        if (parsed) {
-          existingConversationsMap[convId] = parsed;
-          // If this Stop hook came from a child subagent, also re-parse its root parent transcript
-          // from disk before merging so the parent's turns are never double-counted.
-          if (parsed.isSubagentSession && parsed.parentConversationId) {
-            let parentId = parsed.parentConversationId;
-            const visited = new Set([convId]);
-            while (parentId && !visited.has(parentId)) {
-              visited.add(parentId);
-              for (const b of BRAIN_DIRS) {
-                const pPath = path.join(
-                  b.path,
-                  parentId,
-                  ".system_generated",
-                  "logs",
-                  "transcript.jsonl"
-                );
-                if (fs.existsSync(pPath)) {
-                  const reParsedParent = parseTranscriptFile(pPath, parentId, {
-                    surface: b.surface,
-                  });
-                  if (reParsedParent) {
-                    existingConversationsMap[parentId] = reParsedParent;
-                    parentId = reParsedParent.isSubagentSession
-                      ? reParsedParent.parentConversationId
-                      : null;
-                  } else {
-                    parentId = null;
-                  }
-                  break;
-                }
-              }
-              if (!existingConversationsMap[parentId]) break;
-            }
-          } else if (Array.isArray(parsed.childSubagentIds) && parsed.childSubagentIds.length > 0) {
-            // If this Stop hook came from a parent that has child subagents, ensure child transcripts are loaded
-            for (const childId of parsed.childSubagentIds) {
-              if (!existingConversationsMap[childId]) {
-                for (const b of BRAIN_DIRS) {
-                  const cPath = path.join(
-                    b.path,
-                    childId,
-                    ".system_generated",
-                    "logs",
-                    "transcript.jsonl"
-                  );
-                  if (fs.existsSync(cPath)) {
-                    const parsedChild = parseTranscriptFile(cPath, childId, {
-                      surface: b.surface,
-                    });
-                    if (parsedChild) {
-                      existingConversationsMap[childId] = parsedChild;
-                    }
-                    break;
-                  }
-                }
+    const parsed = parseConversationByIdFromDisk(convId, hookPayload);
+    if (parsed) {
+      existingConversationsMap[convId] = parsed;
+
+      // Walk up to the root conversation, re-parsing each ancestor fresh from disk
+      // so we never merge child subagents into an already-merged cached parent.
+      let rootConv = parsed;
+      const visitedAncestors = new Set([convId]);
+      while (rootConv.isSubagentSession && rootConv.parentConversationId) {
+        const parentId = rootConv.parentConversationId;
+        if (visitedAncestors.has(parentId)) break;
+        visitedAncestors.add(parentId);
+
+        const cachedParent = existingConversationsMap[parentId];
+        if (Array.isArray(cachedParent?.mergedSubagents)) {
+          for (const s of cachedParent.mergedSubagents) {
+            if (s.conversationId) prevMergedChildIds.push(s.conversationId);
+          }
+        }
+
+        const freshParent = parseConversationByIdFromDisk(parentId);
+        if (freshParent) {
+          existingConversationsMap[parentId] = freshParent;
+          rootConv = freshParent;
+        } else {
+          break;
+        }
+      }
+
+      // Re-parse all child subagents of the root conversation (plus any previously merged children)
+      // from disk so mergeSubagentsIntoParents has the complete, unmerged family tree.
+      const childQueue = [
+        ...(Array.isArray(rootConv.childSubagentIds) ? rootConv.childSubagentIds : []),
+        ...(Array.isArray(parsed.childSubagentIds) ? parsed.childSubagentIds : []),
+        ...prevMergedChildIds,
+      ];
+      const visitedChildren = new Set([rootConv.conversationId]);
+
+      while (childQueue.length > 0) {
+        const childId = childQueue.shift();
+        if (!childId || visitedChildren.has(childId)) continue;
+        visitedChildren.add(childId);
+
+        const freshChild = parseConversationByIdFromDisk(childId);
+        if (freshChild) {
+          existingConversationsMap[childId] = freshChild;
+          if (Array.isArray(freshChild.childSubagentIds)) {
+            for (const grandChildId of freshChild.childSubagentIds) {
+              if (!visitedChildren.has(grandChildId)) {
+                childQueue.push(grandChildId);
               }
             }
           }
         }
-        break;
       }
     }
   }
@@ -1705,7 +1803,7 @@ export function runSync({
 
   const summary = buildUserSummary(userMeta, mergedConversationsMap);
   fs.writeFileSync(userFilePath, JSON.stringify(summary, null, 2), "utf8");
-  const bundle = writeUiBundle();
+  const bundle = writeUiBundle(userMeta.userId);
 
   if (printSummary) {
     console.log(

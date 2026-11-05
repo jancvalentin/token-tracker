@@ -1,5 +1,20 @@
 # Task Tracker
 
+## [2026-11-04] Fix Duplicate User Profile & Subagent Re-Merge Cost Doubling
+- [x] Diagnose why the UI displayed ~\$591 (`2×` the actual ~\$296–\$301 spend): `~/.gemini/config/plugins/token-tracker/data/users/` contained both `jan-valentin.json` (from `user.config.json`) and `jancvalentin.json` (from `git config user.email` fallback), and `ui/index.html` / `writeUiBundle` summed `conversations` across all JSON files in `data/users/` (`scripts/sync-tokens.mjs`, `ui/index.html`).
+- [x] Stabilize `getUserIdentity` and add `loadUniqueUserProfiles` in `scripts/sync-tokens.mjs` (also wired into `scripts/ui-server.mjs`) to deduplicate overlapping user profile files and automatically prune stale duplicate identity files (`scripts/sync-tokens.mjs`, `scripts/ui-server.mjs`).
+- [x] Add `seenConvIds` conversation UUID deduplication in `ui/index.html` (`render`) and `scripts/analyze-prompt.mjs` (`runPromptEffectivenessAudit`) as a defense-in-depth guard against duplicate conversation aggregation (`ui/index.html`, `scripts/analyze-prompt.mjs`).
+- [x] Fix incremental `Stop` hook (`backfill: false`) subagent merging in `runSync` via `parseConversationByIdFromDisk` so parent and child subagent transcripts are always re-parsed fresh from disk before `mergeSubagentsIntoParents` runs (`scripts/sync-tokens.mjs`).
+- [x] Remove stale `jancvalentin.json` from `~/.gemini/config/plugins/token-tracker/data/users/`, re-run backfill sync, sync all updated files to the installed plugin directory, and verify syntax (`scripts/sync-tokens.mjs`, `scripts/ui-server.mjs`, `scripts/analyze-prompt.mjs`, `ui/index.html`, `docs/decisions.md`, `TASK.md`).
+
+## [2026-11-04] Build Hybrid Prompt Effectiveness Skill & Sidecar Analyzer Lab
+- [x] Create quantitative prompt effectiveness engine in `scripts/analyze-prompt.mjs` scoring Execution Efficiency (40 pts), Clarity & Grounding (35 pts), and Context & Scope Fit (25 pts) (`scripts/analyze-prompt.mjs`).
+- [x] Update `scripts/sync-tokens.mjs` to preserve cleaned user prompt text (`prompts[].text`) up to 2,000 characters for file-path, symbol, and constraint signal extraction while keeping `/api/export-metrics` strictly numbers-only (`scripts/sync-tokens.mjs`).
+- [x] Expose `/api/analyze-prompt` (`GET` & `POST`) in `scripts/ui-server.mjs` (`scripts/ui-server.mjs`).
+- [x] Upgrade `ui/index.html` with inline per-prompt effectiveness score badges (`0–100`), `★ Analyze` buttons on every prompt row, and the interactive **Prompt Effectiveness Lab** drawer with live draft scoring, rewrite templates, and 1-click `/prompt-effectiveness` chat skill command copy (`ui/index.html`).
+- [x] Author `skills/prompt-effectiveness/SKILL.md` and update `plugin.json`, `package.json`, `README.md`, `skills/token-tracker/SKILL.md`, and `docs/decisions.md` (`skills/prompt-effectiveness/SKILL.md`, `plugin.json`, `package.json`, `README.md`, `skills/token-tracker/SKILL.md`, `docs/decisions.md`).
+- [x] Sync all updated files to `~/.gemini/config/plugins/token-tracker` and verify syntax, backfill sync, and CLI prompt audit (`data/users/jan-valentin.json`, `ui/data-bundle.js`).
+
 ## [2026-11-04] Remove Per-Repository `.gemini/token-usage.json` Export & Cleanup
 - [x] Remove `writePerRepoReports` and `--write-repo-reports` flag from `scripts/sync-tokens.mjs` and `export:repos` script from `package.json`.
 - [x] Delete generated `.gemini/token-usage.json` files and empty `.gemini/` directories across all 16 local Git repositories.

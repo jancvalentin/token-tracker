@@ -19,6 +19,8 @@ This skill powers the `token-tracker` plugin (`~/.gemini/config/plugins/token-tr
    - Records granular **per-prompt (`prompts[]`)** and **per-turn (`turns[]`)** token telemetry, and automatically merges child **subagent sessions** into their root parent conversation, interleaving subagent turns chronologically inside the parent prompt that spawned them.
 3. **Numbers-Only JSON Metrics Export**:
    - The dashboard includes an **Export Metrics JSON** button that downloads `token-tracker-metrics-YYYY-MM-DD.json` containing strictly aggregated numeric metrics (`totals`, `byRepository`, `byModel`, `daily`, and anonymized `conversationsNumeric` with nested per-prompt and per-turn token numbers) with zero chat titles, prompts, or local file paths so it can be safely imported into external apps.
+4. **Prompt Effectiveness Scoring & Sandbox (`prompt-effectiveness` skill)**:
+   - Scores historical and draft prompts (`0–100`, `A+` to `D`) across Execution Efficiency, Clarity & Grounding, and Context Fit via `scripts/analyze-prompt.mjs` and the interactive **Prompt Effectiveness Lab** inside the sidecar UI.
 
 ## 2. Commands
 

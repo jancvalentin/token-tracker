@@ -578,6 +578,177 @@
       font-size: 0.67rem;
       margin-right: 4px;
     }
+
+    /* Prompt Card Layout Refinements */
+    .prompt-card-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex: 1;
+      flex-wrap: wrap;
+    }
+    .prompt-index-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 7px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: rgba(138, 180, 248, 0.14);
+      color: var(--accent);
+      border: 1px solid rgba(138, 180, 248, 0.3);
+      flex-shrink: 0;
+    }
+    .prompt-text {
+      font-size: 0.78rem;
+      color: var(--text);
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 440px;
+    }
+    .prompt-metrics {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.74rem;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .btn-analyze-sm {
+      padding: 3px 8px;
+      font-size: 0.7rem;
+      border-radius: 4px;
+      background: rgba(197, 138, 249, 0.14);
+      color: var(--purple);
+      border: 1px solid rgba(197, 138, 249, 0.38);
+      font-weight: 600;
+    }
+    .btn-analyze-sm:hover {
+      background: rgba(197, 138, 249, 0.25);
+      border-color: var(--purple);
+    }
+
+    /* Score Pill Badges */
+    .score-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .score-high {
+      background: rgba(129, 201, 149, 0.15);
+      color: var(--green);
+      border: 1px solid rgba(129, 201, 149, 0.38);
+    }
+    .score-mid {
+      background: rgba(253, 214, 99, 0.15);
+      color: var(--amber);
+      border: 1px solid rgba(253, 214, 99, 0.38);
+    }
+    .score-low {
+      background: rgba(242, 139, 130, 0.15);
+      color: var(--danger);
+      border: 1px solid rgba(242, 139, 130, 0.38);
+    }
+
+    /* Prompt Effectiveness Lab Drawer / Modal */
+    .lab-panel {
+      background: linear-gradient(180deg, rgba(48, 49, 52, 0.95) 0%, rgba(32, 33, 36, 0.98) 100%);
+      border: 1px solid rgba(197, 138, 249, 0.45);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+    }
+    .lab-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+      margin-top: 12px;
+    }
+    .lab-textarea {
+      width: 100%;
+      min-height: 115px;
+      background: #18191c;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      resize: vertical;
+    }
+    .lab-textarea:focus {
+      outline: none;
+      border-color: var(--purple);
+    }
+    .dim-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .dim-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .dim-row-top {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.74rem;
+      font-weight: 600;
+    }
+    .dim-track {
+      height: 7px;
+      background: #18191c;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .dim-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.25s ease;
+    }
+    .finding-list {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      margin-top: 10px;
+    }
+    .finding-item {
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 0.74rem;
+      background: rgba(255, 255, 255, 0.03);
+      border-left: 3px solid var(--accent);
+    }
+    .finding-item.strength { border-left-color: var(--green); }
+    .finding-item.warning { border-left-color: var(--amber); }
+    .finding-item.issue { border-left-color: var(--danger); }
+    .rewrite-box {
+      background: #16171a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.74rem;
+      white-space: pre-wrap;
+      color: #d2e3fc;
+      margin-top: 8px;
+      max-height: 210px;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -602,6 +773,13 @@
           <option value="all">All Repositories</option>
         </select>
 
+        <button id="promptLabBtn" style="border-color:rgba(197,138,249,0.5);color:var(--purple);" title="Open the Prompt Effectiveness Analyzer &amp; Sandbox">
+          <svg class="icon-svg" viewBox="0 0 24 24">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+          </svg>
+          <span>Prompt Effectiveness Lab</span>
+        </button>
+
         <button id="exportBtn" title="Download aggregated token &amp; spend numbers as JSON (no chat titles or prompts)">
           <svg class="icon-svg" viewBox="0 0 24 24">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -621,6 +799,79 @@
         </button>
       </div>
     </header>
+
+    <!-- Prompt Effectiveness Lab & Scorecard Drawer -->
+    <div class="lab-panel" id="promptLabPanel" style="display: none;">
+      <div class="panel-header" style="margin-bottom:8px;">
+        <div class="panel-title-wrap">
+          <svg class="icon-svg" style="color:var(--purple)" viewBox="0 0 24 24">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+          </svg>
+          <span class="panel-title">Prompt Effectiveness Analyzer &amp; Sandbox</span>
+          <span class="badge badge-purple" id="labContextBadge">Draft Sandbox Mode</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button id="copyAgentSkillCmdBtn" title="Copy the /prompt-effectiveness skill command to paste in Antigravity Chat for a deep LLM rewrite">
+            <svg class="icon-svg" viewBox="0 0 24 24">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span id="copyAgentSkillCmdLabel">Copy Chat Skill Command (/prompt-effectiveness)</span>
+          </button>
+          <button id="closeLabBtn" title="Close Prompt Effectiveness Lab">✕ Close</button>
+        </div>
+      </div>
+
+      <p style="font-size:0.76rem;color:var(--muted);margin-bottom:10px;">
+        Click <strong>Analyze</strong> on any historical prompt in the Conversation Ledger below, or type/paste a draft prompt here to score its <strong>Execution Efficiency (40 pts)</strong>, <strong>Clarity &amp; Grounding (35 pts)</strong>, and <strong>Context &amp; Scope Fit (25 pts)</strong> before sending.
+      </p>
+
+      <div class="lab-grid">
+        <!-- Left column: Prompt Input + Telemetry Context + Suggested Rewrite -->
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <label for="labPromptInput" style="font-size:0.75rem;font-weight:600;color:var(--text);">Prompt Under Analysis</label>
+            <div style="display:flex;gap:6px;">
+              <button id="labResetDraftBtn" style="padding:3px 8px;font-size:0.7rem;">New Draft</button>
+              <button class="primary" id="labRunBtn" style="padding:4px 10px;font-size:0.72rem;">Score Prompt</button>
+            </div>
+          </div>
+          <textarea id="labPromptInput" class="lab-textarea" placeholder="Paste or draft a prompt to evaluate (e.g., 'In scripts/sync-tokens.mjs, update parseTranscriptFile to record per-prompt token counts and verify with node --check...')"></textarea>
+
+          <div id="labTelemetryStrip" style="display:none;padding:8px 10px;border-radius:6px;background:rgba(138,180,248,0.08);border:1px solid rgba(138,180,248,0.25);font-size:0.73rem;color:var(--muted);"></div>
+
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:0.74rem;font-weight:600;color:var(--green);">Suggested High-Effectiveness Prompt Template</span>
+              <button id="copyRewriteBtn" style="padding:2px 8px;font-size:0.68rem;">Copy Rewrite</button>
+            </div>
+            <div class="rewrite-box" id="labRewriteOutput"></div>
+          </div>
+        </div>
+
+        <!-- Right column: 0-100 Scorecard, Dimension Bars, Findings & Actionable Checklist -->
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#18191c;border:1px solid var(--border);border-radius:6px;">
+            <div>
+              <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);font-weight:600;">Prompt Effectiveness Score</div>
+              <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px;">
+                <span id="labScoreValue" style="font-size:1.75rem;font-weight:700;font-variant-numeric:tabular-nums;">--</span>
+                <span style="font-size:0.82rem;color:var(--muted);">/ 100</span>
+                <span id="labGradeBadge" class="badge badge-purple">--</span>
+              </div>
+            </div>
+            <div id="labSavingsBox" style="text-align:right;font-size:0.73rem;color:var(--muted);"></div>
+          </div>
+
+          <div class="dim-bars" id="labDimBars"></div>
+
+          <div>
+            <div style="font-size:0.74rem;font-weight:600;color:var(--text);margin-top:4px;">Diagnostic Findings &amp; Improvement Checklist</div>
+            <div class="finding-list" id="labFindingsList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div class="kpi-grid">
       <div class="kpi-card">
@@ -781,7 +1032,484 @@
       expandedConvs: new Set(),
       expandedPrompts: new Set(),
       lastComputedMetrics: null,
+      repoBaselines: {
+        avgTurnsPerPrompt: 4.5,
+        avgCostPerPromptUsd: 0.12,
+        avgCacheHitPct: 88.0,
+      },
+      labContext: null,
     };
+
+    const READ_DISCOVERY_TOOLS_SET = new Set([
+      "read_file",
+      "grep_search",
+      "find_by_name",
+      "list_dir",
+      "list_resources",
+      "read_resource",
+    ]);
+
+    function extractClientPromptSignals(rawText) {
+      const text = String(rawText || "").trim();
+      const words = text ? text.split(/\s+/).filter(Boolean) : [];
+      const wordCount = words.length;
+
+      const fileRegex =
+        /(?:^|[\s`"'(])((?:\/|\.\/|\.\.\/|[a-zA-Z0-9_-]+\/)[a-zA-Z0-9_./-]+\.[a-zA-Z0-9]{1,8}|[a-zA-Z0-9_-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|swift|rb|php|sql|json|yaml|yml|md|html|css|scss|sh|toml))(?:$|[\s`"',.:;)\]])/g;
+      const filePaths = new Set();
+      let m;
+      while ((m = fileRegex.exec(text)) !== null) {
+        if (m[1] && !m[1].startsWith("http")) filePaths.add(m[1]);
+      }
+
+      const symRegex =
+        /`[A-Za-z_$][A-Za-z0-9_$.()[\]-]{1,60}`|\b[a-z]+[A-Z][A-Za-z0-9_]*\b|\b[A-Z][a-z0-9]+[A-Z][A-Za-z0-9_]*\b/g;
+      const codeSymbols = new Set();
+      while ((m = symRegex.exec(text)) !== null) {
+        codeSymbols.add(m[0].replace(/`/g, ""));
+      }
+
+      const actionVerbs =
+        text.match(
+          /\b(implement|create|build|fix|refactor|update|add|remove|delete|optimize|analyze|audit|debug|migrate|configure|deploy|test|verify|design|extract|merge|resolve|document)\b/gi
+        ) || [];
+      const vaguePhrases =
+        text.match(
+          /\b(make it better|fix it|doesn't work|not working|do something|somehow|whatever|stuff|things|broken|help me with this|check this|look into)\b/gi
+        ) || [];
+      const acceptanceMarkers =
+        text.match(
+          /\b(should|must|ensure|verify|expect|test|acceptance|criteria|without breaking|zero errors|return|output|format|schema|validate|confirm|check that)\b/gi
+        ) || [];
+      const constraintMarkers =
+        text.match(
+          /\b(do not|don't|never|avoid|only|strictly|keep|preserve|limit|within|compatible|sandbox|security|performance|typecheck|lint)\b/gi
+        ) || [];
+      const multiPartMarkers =
+        text.match(
+          /\b(also|and also|additionally|furthermore|plus|on top of that|while you're at it|by the way|next|after that)\b/gi
+        ) || [];
+
+      const hasBulletList = /(?:^|\n)\s*(?:[-*•]|\d+\.)\s+/m.test(text);
+      const hasCodeFence = /```[\s\S]*?```/.test(text);
+      const hasSlashCommand = /(?:^|\s)\/[a-z][a-z0-9_-]{1,25}\b/i.test(text);
+      const hasAtMention = /(?:^|\s)@[a-zA-Z0-9_./-]+/.test(text);
+      const questionCount = (text.match(/\?/g) || []).length;
+
+      return {
+        text,
+        wordCount,
+        filePaths: Array.from(filePaths),
+        codeSymbols: Array.from(codeSymbols).slice(0, 10),
+        actionVerbs: Array.from(new Set(actionVerbs.map((w) => w.toLowerCase()))),
+        vaguePhrases: Array.from(new Set(vaguePhrases.map((w) => w.toLowerCase()))),
+        acceptanceMarkers: Array.from(new Set(acceptanceMarkers.map((w) => w.toLowerCase()))),
+        constraintMarkers: Array.from(new Set(constraintMarkers.map((w) => w.toLowerCase()))),
+        multiPartMarkers: Array.from(new Set(multiPartMarkers.map((w) => w.toLowerCase()))),
+        hasBulletList,
+        hasCodeFence,
+        hasSlashCommand,
+        hasAtMention,
+        questionCount,
+      };
+    }
+
+    function evaluatePromptClient(promptInput = {}, options = {}) {
+      const rawText = promptInput.text || promptInput.preview || promptInput.promptPreview || "";
+      const signals = extractClientPromptSignals(rawText);
+      const hasTelemetry =
+        typeof promptInput.turnCount === "number" &&
+        (promptInput.turnCount > 0 || (promptInput.totalTokens || 0) > 0);
+      const baselines = options.baselines || state.repoBaselines;
+      const turns = Array.isArray(promptInput.turns) ? promptInput.turns : [];
+      const turnCount = Number(promptInput.turnCount || turns.length || 0);
+      const toolCallCount = Number(promptInput.toolCallCount || 0);
+      const inputTokens = Number(promptInput.inputTokens || 0);
+      const cacheReadTokens = Number(promptInput.cacheReadTokens || 0);
+      const outputTokens = Number(promptInput.outputTokens || 0);
+      const totalTokens = Number(
+        promptInput.totalTokens || inputTokens + cacheReadTokens + outputTokens
+      );
+      const estimatedCostUsd = Number(promptInput.estimatedCostUsd || 0);
+      const longContextTurns = Number(promptInput.longContextTurns || 0);
+      const subagentRunCount = Number(promptInput.subagentRunCount || 0);
+      const subagentTurnCount = Number(
+        promptInput.subagentTurnCount || promptInput.subagentTurns || 0
+      );
+
+      let discoveryToolCalls = 0;
+      let totalRecordedTools = 0;
+      for (const t of turns) {
+        for (const tn of t.tools || []) {
+          totalRecordedTools++;
+          if (READ_DISCOVERY_TOOLS_SET.has(tn)) discoveryToolCalls++;
+        }
+      }
+      const discoveryRatio =
+        totalRecordedTools > 0 ? discoveryToolCalls / totalRecordedTools : 0;
+      const cacheHitPct =
+        inputTokens + cacheReadTokens > 0
+          ? Number(((cacheReadTokens / (inputTokens + cacheReadTokens)) * 100).toFixed(1))
+          : 0;
+
+      const findings = [];
+      let clarityScore = 0;
+
+      if (signals.wordCount >= 18 && signals.wordCount <= 220) {
+        clarityScore += 10;
+        findings.push({
+          type: "strength",
+          title: "Optimal prompt density",
+          detail: `${signals.wordCount} words provides actionable context without diluting focus.`,
+        });
+      } else if (signals.wordCount >= 8 && signals.wordCount < 18) {
+        clarityScore += 6;
+        findings.push({
+          type: "warning",
+          title: "Brief / under-specified prompt",
+          detail: `At ${signals.wordCount} words, the agent must infer target files and edge cases.`,
+        });
+      } else if (signals.wordCount > 220) {
+        clarityScore += 7;
+      } else {
+        clarityScore += 2;
+        findings.push({
+          type: "issue",
+          title: "Ultra-short / ambiguous prompt",
+          detail: `Only ${signals.wordCount} words. Forces extra workspace discovery turns and higher token spend.`,
+        });
+      }
+
+      const hasFileGrounding = signals.filePaths.length > 0 || signals.hasAtMention;
+      const hasSymbolGrounding = signals.codeSymbols.length > 0;
+      if (hasFileGrounding && hasSymbolGrounding) {
+        clarityScore += 11;
+        findings.push({
+          type: "strength",
+          title: "Strong file & symbol grounding",
+          detail: `References concrete paths (${signals.filePaths.slice(0, 2).join(", ") || "@mention"}) and code identifiers (${signals.codeSymbols.slice(0, 2).join(", ")}).`,
+        });
+      } else if (hasFileGrounding || hasSymbolGrounding) {
+        clarityScore += 7;
+        findings.push({
+          type: "strength",
+          title: "Partial code grounding",
+          detail: hasFileGrounding
+            ? `Includes file path reference (${signals.filePaths.slice(0, 2).join(", ")}).`
+            : `Mentions symbols (${signals.codeSymbols.slice(0, 2).join(", ")}); adding a file path will skip grep turns.`,
+        });
+      } else {
+        clarityScore += 2;
+        findings.push({
+          type: "warning",
+          title: "No file paths or code symbols referenced",
+          detail: "Add at least 1 file path or backticked symbol to cut initial search turns by 30–50%.",
+        });
+      }
+
+      if (signals.actionVerbs.length > 0 && signals.vaguePhrases.length === 0) {
+        clarityScore += 7;
+      } else if (signals.vaguePhrases.length > 0) {
+        clarityScore += 2;
+        findings.push({
+          type: "warning",
+          title: "Ambiguous phrasing detected",
+          detail: `Replace vague phrases (${signals.vaguePhrases.join(", ")}) with explicit technical verbs.`,
+        });
+      } else {
+        clarityScore += 4;
+      }
+
+      let structPts = 0;
+      if (signals.acceptanceMarkers.length > 0) structPts += 3;
+      if (signals.constraintMarkers.length > 0) structPts += 2;
+      if (signals.hasBulletList || signals.hasCodeFence || signals.hasSlashCommand) structPts += 2;
+      clarityScore += Math.min(7, structPts);
+      if (signals.acceptanceMarkers.length === 0) {
+        findings.push({
+          type: "warning",
+          title: "Missing explicit verification criteria",
+          detail: "Specify how the agent should verify completion (e.g., 'run typecheck and confirm zero errors').",
+        });
+      }
+      clarityScore = Math.max(0, Math.min(35, clarityScore));
+
+      let efficiencyScore = 0;
+      if (hasTelemetry) {
+        const effectiveMainTurns = Math.max(1, turnCount - subagentTurnCount);
+        if (effectiveMainTurns <= 3) {
+          efficiencyScore += 15;
+          findings.push({
+            type: "strength",
+            title: "Fast turns-to-completion",
+            detail: `Completed in ${effectiveMainTurns} main turn${effectiveMainTurns === 1 ? "" : "s"} (repo avg: ${baselines.avgTurnsPerPrompt}).`,
+          });
+        } else if (effectiveMainTurns <= 6) {
+          efficiencyScore += 12;
+        } else if (effectiveMainTurns <= 10) {
+          efficiencyScore += 8;
+          findings.push({
+            type: "warning",
+            title: "Elevated turn count",
+            detail: `Required ${effectiveMainTurns} main turns (${turnCount} total). Each extra turn re-reads the full conversation context.`,
+          });
+        } else {
+          efficiencyScore += 4;
+          findings.push({
+            type: "issue",
+            title: "High multi-turn iteration loop",
+            detail: `Took ${turnCount} turns and ${toolCallCount} tool calls. Consider breaking into smaller sequential prompts.`,
+          });
+        }
+
+        if (totalRecordedTools === 0 || discoveryRatio <= 0.45) {
+          efficiencyScore += 10;
+        } else if (discoveryRatio <= 0.7) {
+          efficiencyScore += 7;
+        } else {
+          efficiencyScore += 4;
+          if (!hasFileGrounding && turnCount >= 4) {
+            findings.push({
+              type: "issue",
+              title: "High workspace search overhead",
+              detail: `${discoveryToolCalls}/${totalRecordedTools} tool calls were spent searching/reading files because paths weren't grounded.`,
+            });
+          }
+        }
+
+        if (totalTokens === 0 || cacheHitPct >= 88) {
+          efficiencyScore += 8;
+        } else if (cacheHitPct >= 70) {
+          efficiencyScore += 6;
+        } else {
+          efficiencyScore += 3;
+        }
+
+        const baseCost = Math.max(0.02, baselines.avgCostPerPromptUsd || 0.12);
+        const costRatio = estimatedCostUsd / baseCost;
+        if (estimatedCostUsd <= baseCost * 0.85) efficiencyScore += 7;
+        else if (costRatio <= 1.35) efficiencyScore += 5;
+        else if (costRatio <= 2.2) efficiencyScore += 3;
+        else {
+          efficiencyScore += 1;
+          findings.push({
+            type: "issue",
+            title: "Outlier token & cost spend",
+            detail: `Cost $${estimatedCostUsd.toFixed(2)} (${costRatio.toFixed(1)}× the $${baseCost.toFixed(2)} repo average).`,
+          });
+        }
+      } else {
+        let pred = 18;
+        if (hasFileGrounding) pred += 10;
+        if (hasSymbolGrounding) pred += 5;
+        if (signals.acceptanceMarkers.length > 0) pred += 4;
+        if (signals.vaguePhrases.length === 0 && signals.wordCount >= 12) pred += 3;
+        efficiencyScore = Math.min(40, pred);
+      }
+      efficiencyScore = Math.max(0, Math.min(40, efficiencyScore));
+
+      let contextScore = 25;
+      if (longContextTurns > 0) {
+        contextScore -= Math.min(10, longContextTurns * 3);
+        findings.push({
+          type: "issue",
+          title: `Triggered >200k Long-Context pricing (${longContextTurns} turns)`,
+          detail: "Use `/compact` or start a fresh conversation before context exceeds 200k tokens.",
+        });
+      }
+      if (signals.multiPartMarkers.length >= 2 || signals.questionCount >= 4) {
+        contextScore -= 5;
+        findings.push({
+          type: "warning",
+          title: "Multi-goal prompt bundling",
+          detail: "Split unrelated tasks into separate prompts or delegate parallel tracks via subagents.",
+        });
+      }
+      if (hasTelemetry && turnCount > 12 && subagentRunCount === 0) {
+        contextScore -= 5;
+        findings.push({
+          type: "warning",
+          title: "Deep monolithic loop without subagent isolation",
+          detail: "Delegate broad codebase exploration to the `research` subagent to keep raw file reads out of main context.",
+        });
+      } else if (subagentRunCount > 0) {
+        findings.push({
+          type: "strength",
+          title: "Clean subagent context isolation",
+          detail: `Delegated ${subagentRunCount} subagent run(s) (${subagentTurnCount} turns), keeping subagent tool output isolated.`,
+        });
+      }
+      contextScore = Math.max(0, Math.min(25, contextScore));
+
+      const score = Math.round(clarityScore + efficiencyScore + contextScore);
+      const grade =
+        score >= 90 ? "A+" : score >= 82 ? "A" : score >= 74 ? "B" : score >= 60 ? "C" : "D";
+
+      const repoLabel =
+        options.project && options.project !== "general" ? options.project : "<repo-or-module>";
+      const fileEx =
+        signals.filePaths.length > 0
+          ? signals.filePaths.map((f) => `\`${f}\``).join(", ")
+          : `\`src/path/to/target-file.ts\``;
+      const symEx =
+        signals.codeSymbols.length > 0
+          ? signals.codeSymbols.slice(0, 3).map((s) => `\`${s}\``).join(", ")
+          : `\`targetFunctionOrComponent\``;
+
+      const suggestedRewrite = [
+        `**Goal**: ${(signals.text || "Describe your objective clearly").replace(/\s+/g, " ").trim()}`,
+        ``,
+        `**Target Files & Symbols (${repoLabel})**: Inspect ${fileEx} (specifically ${symEx}) first to avoid broad workspace scanning.`,
+        ``,
+        `**Requirements & Constraints**:`,
+        `- Implement the change following existing patterns in ${fileEx}.`,
+        `- Preserve existing public signatures, types, and unrelated logic.`,
+        `**Verification Criteria**: Run syntax/typecheck and tests to confirm zero errors before finishing.`,
+      ].join("\n");
+
+      const excessTurns = hasTelemetry ? Math.max(0, turnCount - Math.max(3, subagentTurnCount + 2)) : 0;
+      const avgTurnCost = turnCount > 0 ? estimatedCostUsd / turnCount : 0;
+      const potentialSavingsUsd =
+        hasTelemetry && score < 85 && excessTurns > 0
+          ? Number(Math.min(estimatedCostUsd * 0.55, excessTurns * avgTurnCost * 0.65).toFixed(4))
+          : 0;
+
+      return {
+        score,
+        grade,
+        hasTelemetry,
+        dimensions: {
+          efficiency: {
+            score: efficiencyScore,
+            maxScore: 40,
+            pct: Math.round((efficiencyScore / 40) * 100),
+            label: hasTelemetry ? "Execution Efficiency" : "Predicted Efficiency",
+          },
+          clarity: {
+            score: clarityScore,
+            maxScore: 35,
+            pct: Math.round((clarityScore / 35) * 100),
+            label: "Clarity & Grounding",
+          },
+          contextFit: {
+            score: contextScore,
+            maxScore: 25,
+            pct: Math.round((contextScore / 25) * 100),
+            label: "Context & Scope Fit",
+          },
+        },
+        findings,
+        suggestedRewrite,
+        potentialSavingsUsd,
+        telemetrySummary: hasTelemetry
+          ? `${turnCount} turns (${subagentTurnCount} subagent) • ${toolCallCount} tools • ${fmtCompact(totalTokens)} tok (${cacheHitPct}% cached) • ${fmtUsd(estimatedCostUsd)}`
+          : null,
+      };
+    }
+
+    function renderLabReport(report, contextMeta = {}) {
+      const panel = document.getElementById("promptLabPanel");
+      panel.style.display = "block";
+
+      const badgeEl = document.getElementById("labContextBadge");
+      if (contextMeta.conversationId) {
+        badgeEl.textContent = `${contextMeta.project || "repo"} • Session ${contextMeta.conversationId.slice(0, 8)} • Prompt #${contextMeta.promptIndex || 1}`;
+      } else {
+        badgeEl.textContent = "Draft Sandbox Mode (Pre-Send Check)";
+      }
+
+      const tStrip = document.getElementById("labTelemetryStrip");
+      if (report.telemetrySummary) {
+        tStrip.style.display = "block";
+        tStrip.innerHTML = `<strong style="color:var(--accent);">Recorded Execution Telemetry:</strong> ${escapeHtml(report.telemetrySummary)}`;
+      } else {
+        tStrip.style.display = "none";
+      }
+
+      const scoreEl = document.getElementById("labScoreValue");
+      scoreEl.textContent = report.score;
+      scoreEl.style.color =
+        report.score >= 82 ? "var(--green)" : report.score >= 68 ? "var(--amber)" : "var(--danger)";
+
+      const gradeEl = document.getElementById("labGradeBadge");
+      gradeEl.textContent = `Grade ${report.grade}`;
+      gradeEl.className =
+        report.score >= 82
+          ? "badge badge-green"
+          : report.score >= 68
+            ? "badge badge-amber"
+            : "badge badge-purple";
+
+      const savingsEl = document.getElementById("labSavingsBox");
+      if (report.potentialSavingsUsd > 0) {
+        savingsEl.innerHTML = `<span style="color:var(--green);font-weight:600;">Est. Savings: ${fmtUsdFine(report.potentialSavingsUsd)}</span><br/><span>by grounding paths &amp; reducing turns</span>`;
+      } else {
+        savingsEl.innerHTML = `<span style="color:var(--muted);">Target ≥ 85/100 for optimal token efficiency</span>`;
+      }
+
+      const dims = [
+        report.dimensions.efficiency,
+        report.dimensions.clarity,
+        report.dimensions.contextFit,
+      ];
+      document.getElementById("labDimBars").innerHTML = dims
+        .map((d) => {
+          const fillColor =
+            d.pct >= 80 ? "var(--green)" : d.pct >= 65 ? "var(--accent)" : "var(--amber)";
+          return `
+            <div class="dim-row">
+              <div class="dim-row-top">
+                <span>${escapeHtml(d.label)}</span>
+                <span style="color:${fillColor};">${d.score} / ${d.maxScore} pts (${d.pct}%)</span>
+              </div>
+              <div class="dim-track">
+                <div class="dim-fill" style="width:${d.pct}%;background:${fillColor};"></div>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      document.getElementById("labFindingsList").innerHTML = (report.findings || [])
+        .map(
+          (f) => `
+            <div class="finding-item ${f.type}">
+              <strong>${escapeHtml(f.title)}:</strong> ${escapeHtml(f.detail)}
+            </div>
+          `
+        )
+        .join("");
+
+      document.getElementById("labRewriteOutput").textContent = report.suggestedRewrite || "";
+    }
+
+    function openPromptAnalysis(convId, promptIndex, ev) {
+      if (ev) ev.stopPropagation();
+      const conv = findConvById(convId);
+      if (!conv) return;
+      const promptObj =
+        (conv.prompts || []).find((p) => p.promptIndex === Number(promptIndex)) ||
+        (conv.prompts || [])[0];
+      if (!promptObj) return;
+
+      state.labContext = {
+        conversationId: conv.conversationId,
+        project: conv.project,
+        promptIndex: promptObj.promptIndex,
+        promptObj,
+      };
+
+      const inputEl = document.getElementById("labPromptInput");
+      inputEl.value = promptObj.text || promptObj.preview || conv.title || "";
+
+      const report = evaluatePromptClient(promptObj, {
+        project: conv.project,
+        model: promptObj.model || conv.model,
+        baselines: state.repoBaselines,
+      });
+      renderLabReport(report, state.labContext);
+      document.getElementById("promptLabPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
 
     function escapeHtml(str) {
       return String(str || "")
@@ -948,8 +1676,13 @@
     function render() {
       const primaryUser = state.users[0]?.user || { userId: "local", displayName: "Developer" };
       const allConvs = [];
+      const seenConvIds = new Set();
       for (const u of state.users) {
         for (const c of u.conversations || []) {
+          if (c.conversationId) {
+            if (seenConvIds.has(c.conversationId)) continue;
+            seenConvIds.add(c.conversationId);
+          }
           if (state.selectedProject !== "all" && c.project !== state.selectedProject) continue;
           if (state.searchQuery) {
             const q = state.searchQuery.toLowerCase();
@@ -1010,6 +1743,12 @@
       const avgCostPerPrompt = trackedPrompts > 0 ? cost / trackedPrompts : 0;
       const avgCostPerTurn = trackedTurns > 0 ? cost / trackedTurns : 0;
       const avgTurnsPerPrompt = prompts > 0 ? (turns / prompts).toFixed(1) : "0.0";
+
+      state.repoBaselines = {
+        avgTurnsPerPrompt: Number(avgTurnsPerPrompt) || 4.5,
+        avgCostPerPromptUsd: Number(avgCostPerPrompt.toFixed(4)) || 0.12,
+        avgCacheHitPct: cacheHitPct || 88.0,
+      };
 
       document.getElementById("kpiTotalTokens").textContent = fmtCompact(totalTokens);
       document.getElementById("kpiTokenSplit").textContent =
@@ -1450,14 +2189,27 @@
                       `
                       : "";
 
+                    const pReport = evaluatePromptClient(p, {
+                      project: c.project,
+                      model: p.model || c.model,
+                      baselines: state.repoBaselines,
+                    });
+                    const pScoreCls =
+                      pReport.score >= 82
+                        ? "score-high"
+                        : pReport.score >= 68
+                          ? "score-mid"
+                          : "score-low";
+
                     return `
                       <div class="prompt-card">
                         <div class="prompt-card-header" onclick="togglePromptExpand('${c.conversationId}', ${p.promptIndex}, event)">
                           <div class="prompt-card-title">
                             <span class="chevron ${pExpanded ? "open" : ""}" style="${pExpanded ? "transform:rotate(90deg);color:var(--accent);" : ""}">▶</span>
                             <span class="prompt-index-pill">Prompt #${p.promptIndex}</span>
+                            <span class="score-pill ${pScoreCls}" title="Prompt Effectiveness Score: ${pReport.score}/100 (${pReport.grade})">${pReport.score}/100 (${pReport.grade})</span>
                             <span style="color:var(--muted);font-size:0.72rem;font-family:monospace;">${pTime}</span>
-                            <span class="prompt-text" title="${escapeHtml(p.text || p.promptPreview || "")}">${escapeHtml(p.text || p.promptPreview || "(System / Continuation)")}</span>
+                            <span class="prompt-text" title="${escapeHtml(p.text || p.preview || p.promptPreview || "")}">${escapeHtml(p.preview || p.text || p.promptPreview || "(System / Continuation)")}</span>
                             ${pSpawnedRoles}
                             ${pSubBadge}
                           </div>
@@ -1466,6 +2218,7 @@
                             <span><strong>${fmtNum(p.toolCallCount || 0)}</strong> tools</span>
                             <span><strong style="color:var(--accent);">${fmtCompact(p.totalTokens || 0)}</strong> tok</span>
                             <span style="color:var(--green);"><strong>${fmtUsd(p.estimatedCostUsd || 0)}</strong></span>
+                            <button class="btn-analyze-sm" onclick="openPromptAnalysis('${c.conversationId}', ${p.promptIndex}, event)" title="Analyze this prompt's effectiveness and generate a rewrite">★ Analyze</button>
                           </div>
                         </div>
                         ${turnsRowsHtml}
@@ -1548,6 +2301,91 @@
         }
       } catch {}
       btn.innerHTML = origHtml;
+    });
+
+    document.getElementById("promptLabBtn").addEventListener("click", () => {
+      const panel = document.getElementById("promptLabPanel");
+      if (panel.style.display === "none") {
+        const inputEl = document.getElementById("labPromptInput");
+        if (!inputEl.value.trim()) {
+          state.labContext = null;
+          inputEl.value =
+            "In scripts/sync-tokens.mjs, update parseTranscriptFile to record per-prompt token counts and verify with node --check.";
+        }
+        const promptPayload = state.labContext?.promptObj
+          ? Object.assign({}, state.labContext.promptObj, { text: inputEl.value })
+          : { text: inputEl.value };
+        const report = evaluatePromptClient(promptPayload, {
+          project: state.labContext?.project || state.selectedProject,
+          baselines: state.repoBaselines,
+        });
+        renderLabReport(report, state.labContext || {});
+      } else {
+        panel.style.display = "none";
+      }
+    });
+
+    document.getElementById("closeLabBtn").addEventListener("click", () => {
+      document.getElementById("promptLabPanel").style.display = "none";
+    });
+
+    document.getElementById("labResetDraftBtn").addEventListener("click", () => {
+      state.labContext = null;
+      const inputEl = document.getElementById("labPromptInput");
+      inputEl.value = "";
+      inputEl.focus();
+      const report = evaluatePromptClient({ text: "" }, {
+        project: state.selectedProject,
+        baselines: state.repoBaselines,
+      });
+      renderLabReport(report, {});
+    });
+
+    function runDraftOrContextScore() {
+      const inputEl = document.getElementById("labPromptInput");
+      const textVal = inputEl.value;
+      const promptPayload = state.labContext?.promptObj
+        ? Object.assign({}, state.labContext.promptObj, { text: textVal, preview: textVal })
+        : { text: textVal };
+      const report = evaluatePromptClient(promptPayload, {
+        project: state.labContext?.project || state.selectedProject,
+        baselines: state.repoBaselines,
+      });
+      renderLabReport(report, state.labContext || {});
+    }
+
+    document.getElementById("labRunBtn").addEventListener("click", runDraftOrContextScore);
+    document.getElementById("labPromptInput").addEventListener("input", () => {
+      // If user edits text manually, switch to live draft scoring if they clear historical context
+      runDraftOrContextScore();
+    });
+
+    document.getElementById("copyRewriteBtn").addEventListener("click", async () => {
+      const btn = document.getElementById("copyRewriteBtn");
+      const text = document.getElementById("labRewriteOutput").textContent || "";
+      try {
+        await navigator.clipboard.writeText(text);
+        const orig = btn.textContent;
+        btn.textContent = "✓ Copied!";
+        setTimeout(() => (btn.textContent = orig), 1500);
+      } catch {}
+    });
+
+    document.getElementById("copyAgentSkillCmdBtn").addEventListener("click", async () => {
+      const labelEl = document.getElementById("copyAgentSkillCmdLabel");
+      const rawText = (document.getElementById("labPromptInput").value || "").trim();
+      let cmd = `/prompt-effectiveness`;
+      if (state.labContext?.conversationId) {
+        cmd = `/prompt-effectiveness Analyze conversation ${state.labContext.conversationId.slice(0, 8)} Prompt #${state.labContext.promptIndex || 1} (${state.labContext.project}) and rewrite it for higher token and turn efficiency: "${rawText.replace(/"/g, "'")}"`;
+      } else if (rawText) {
+        cmd = `/prompt-effectiveness Score and rewrite this draft prompt for maximum clarity, file grounding, and minimal turns: "${rawText.replace(/"/g, "'")}"`;
+      }
+      try {
+        await navigator.clipboard.writeText(cmd);
+        const orig = labelEl.textContent;
+        labelEl.textContent = "✓ Copied /prompt-effectiveness Command to Clipboard!";
+        setTimeout(() => (labelEl.textContent = orig), 2000);
+      } catch {}
     });
 
     loadData();

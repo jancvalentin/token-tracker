@@ -1,15 +1,15 @@
 {
   "name": "token-tracker",
   "displayName": "Token Tracker & Spend Analytics",
-  "version": "1.1.0",
-  "description": "Tracks developer token spending (input, cache read, and output tokens) via Stop hooks and historical transcript backfill, with an in-app dashboard and numbers-only JSON metrics exporter.",
+  "version": "1.2.0",
+  "description": "Tracks developer token spending (input, cache read, and output tokens) via Stop hooks and historical transcript backfill, with an in-app dashboard, Prompt Effectiveness Analyzer & Lab, and numbers-only JSON metrics exporter.",
   "author": {
     "name": "Jan Valentin"
   },
   "logo": "assets/logo.svg",
   "suggestedPrompts": [
     "Sync my historical transcripts and show a summary of my token usage by repository",
-    "Launch the Token Tracker dashboard and export my aggregated token metrics JSON",
+    "Audit my recent prompts with /prompt-effectiveness and rewrite my lowest-scoring prompts",
     "Analyze my cache hit efficiency and top token-consuming repositories this week"
   ]
 }
