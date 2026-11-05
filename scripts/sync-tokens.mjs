@@ -10,7 +10,19 @@ const __dirname = path.dirname(__filename);
 const PLUGIN_ROOT = path.resolve(__dirname, "..");
 const DATA_DIR = path.join(PLUGIN_ROOT, "data", "users");
 const UI_DIR = path.join(PLUGIN_ROOT, "ui");
-const BRAIN_DIR = path.join(os.homedir(), ".gemini", "antigravity", "brain");
+
+// Both Antigravity 2.0 + CLI (~/.gemini/antigravity/brain) and Antigravity IDE (~/.gemini/antigravity-ide/brain)
+const BRAIN_DIRS = [
+  { surface: "2.0 / CLI", path: path.join(os.homedir(), ".gemini", "antigravity", "brain") },
+  { surface: "IDE", path: path.join(os.homedir(), ".gemini", "antigravity-ide", "brain") },
+];
+const PROJECTS_CONFIG_DIR = path.join(os.homedir(), ".gemini", "config", "projects");
+const CONV_SUMMARIES_DB_PATH = path.join(
+  os.homedir(),
+  ".gemini",
+  "antigravity",
+  "conversation_summaries.db"
+);
 
 /**
  * Official per-model pricing table (USD per 1M tokens)
@@ -201,42 +213,171 @@ function getUserIdentity() {
   };
 }
 
-const REPO_METADATA_CACHE = new Map();
-
-function isInvalidProjectCandidate(name) {
-  if (!name) return true;
-  const trimmed = name.trim();
-  if (!trimmed || trimmed.startsWith(".")) return true;
-  if (
-    [
-      "Carrion",
-      "Projects",
-      "Git",
-      "Desktop",
-      "Users",
-      "general",
-      "README.md",
-      "TASK.md",
-      "CHANGELOG.md",
-      "install.sh",
-      "package.json",
-      "node_modules",
-      "src",
-      "app",
-      "apps",
-      "docs",
-    ].includes(trimmed)
-  ) {
-    return true;
+function fileUriToPath(uri) {
+  if (!uri || typeof uri !== "string") return null;
+  const trimmed = uri.trim();
+  if (trimmed.startsWith("file://")) {
+    try {
+      return fileURLToPath(trimmed).replace(/\/+$/, "");
+    } catch {
+      return trimmed.replace(/^file:\/\//, "").replace(/\/+$/, "");
+    }
   }
-  if (/\.(md|sh|json|ts|js|mjs|cjs|html|css|png|jpg|jpeg|svg|pdf|txt|jsonl|yaml|yml|lock)$/i.test(trimmed)) {
-    return true;
+  if (trimmed.startsWith("/")) {
+    return trimmed.replace(/\/+$/, "");
   }
-  return false;
+  return null;
 }
 
+let cachedProjectRegistry = null;
+
 /**
- * Resolves a project slug to its actual local Git repository path and remote URL if present on disk.
+ * Loads Antigravity's configured projects strictly from `~/.gemini/config/projects/*.json`
+ * and filters to actual projects (entries that define workspace/repository `projectResources.resources`).
+ * Also reads `~/.gemini/antigravity/conversation_summaries.db` if available to map `conversationId -> projectId`.
+ */
+export function getAntigravityProjectRegistry(forceReload = false) {
+  if (cachedProjectRegistry && !forceReload) {
+    return cachedProjectRegistry;
+  }
+
+  const projectsById = new Map();
+  const projectsByName = new Map();
+  const folderMatchers = [];
+
+  if (fs.existsSync(PROJECTS_CONFIG_DIR)) {
+    try {
+      const files = fs.readdirSync(PROJECTS_CONFIG_DIR).filter((f) => f.endsWith(".json"));
+      for (const file of files) {
+        try {
+          const raw = fs.readFileSync(path.join(PROJECTS_CONFIG_DIR, file), "utf8");
+          const data = JSON.parse(raw);
+
+          // Filter out non-project entries (such as "outside-of-project" or virtual sidecar configs with no folder resources)
+          if (!data || !data.id || data.id === "outside-of-project" || !data.name || typeof data.name !== "string") {
+            continue;
+          }
+
+          const resources = Array.isArray(data.projectResources?.resources)
+            ? data.projectResources.resources
+            : [];
+          const folders = [];
+
+          for (let i = 0; i < resources.length; i++) {
+            const res = resources[i];
+            const rawUri = res?.gitFolder?.folderUri || res?.folderUri;
+            const folderPath = fileUriToPath(rawUri);
+            if (folderPath) {
+              const isPrimary = i === 0 || path.basename(folderPath) === data.name;
+              folders.push({
+                path: folderPath,
+                isPrimary,
+                isGitFolder: Boolean(res?.gitFolder),
+              });
+            }
+          }
+
+          const envs = Array.isArray(data.environments?.environments)
+            ? data.environments.environments
+            : [];
+          for (const env of envs) {
+            const envResources = Array.isArray(env?.resources?.resources)
+              ? env.resources.resources
+              : [];
+            for (const res of envResources) {
+              const rawUri = res?.gitFolder?.folderUri || res?.folderUri;
+              const folderPath = fileUriToPath(rawUri);
+              if (folderPath) {
+                folders.push({
+                  path: folderPath,
+                  isPrimary: true,
+                  isGitFolder: Boolean(res?.gitFolder),
+                  isWorktree: true,
+                });
+              }
+            }
+          }
+
+          // Only include actual projects that have at least one workspace folder resource
+          if (folders.length === 0) continue;
+
+          const primaryFolder = folders.find((f) => f.isPrimary) || folders[0];
+          const projectEntry = {
+            id: data.id,
+            name: data.name,
+            primaryPath: primaryFolder.path,
+            isGitFolder: folders.some((f) => f.isGitFolder),
+            isParentOfConfiguredProject: false,
+            folders,
+          };
+
+          projectsById.set(data.id, projectEntry);
+          projectsByName.set(data.name, projectEntry);
+
+          for (const fl of folders) {
+            folderMatchers.push({
+              projectId: data.id,
+              project: data.name,
+              path: fl.path,
+              isPrimary: fl.isPrimary,
+              length: fl.path.length,
+            });
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
+  // Mark any configured project whose primary path is a parent folder of another configured project
+  // (e.g., `/Git/plugins` containing `/Git/plugins/token-tracker-plugin`)
+  const allProjects = Array.from(projectsByName.values());
+  for (const pA of allProjects) {
+    for (const pB of allProjects) {
+      if (pA.name !== pB.name && pB.primaryPath.startsWith(pA.primaryPath + "/")) {
+        pA.isParentOfConfiguredProject = true;
+      }
+    }
+  }
+
+  // Primary project folders take precedence over secondary attached folders; longest (most specific) path wins
+  folderMatchers.sort(
+    (a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0) || b.length - a.length
+  );
+
+  // Load conversation -> project_id mapping from Antigravity's conversation_summaries.db if accessible
+  const conversationDbMap = new Map();
+  if (fs.existsSync(CONV_SUMMARIES_DB_PATH)) {
+    try {
+      const sql =
+        "SELECT conversation_id, project_id, workspace_uris, parent_conversation_id FROM conversation_summaries;";
+      const stdout = execSync(`sqlite3 -json "${CONV_SUMMARIES_DB_PATH}" "${sql}"`, {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      const rows = JSON.parse(stdout);
+      if (Array.isArray(rows)) {
+        for (const row of rows) {
+          if (row && row.conversation_id) {
+            conversationDbMap.set(row.conversation_id, row);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  cachedProjectRegistry = {
+    projectsById,
+    projectsByName,
+    folderMatchers,
+    conversationDbMap,
+  };
+  return cachedProjectRegistry;
+}
+
+const REPO_METADATA_CACHE = new Map();
+
+/**
+ * Resolves a configured project name to its local repository metadata using `.gemini/config/projects`.
  */
 function resolveRepoMetadata(projectSlug) {
   if (!projectSlug || projectSlug === "general") {
@@ -246,50 +387,35 @@ function resolveRepoMetadata(projectSlug) {
     return REPO_METADATA_CACHE.get(projectSlug);
   }
 
-  const home = os.homedir();
-  const candidateDirs = [
-    path.join(home, "Git", "Carrion", projectSlug),
-    path.join(home, "Git", "Projects", projectSlug),
-    path.join(home, "Git", projectSlug),
-    path.join(home, "Desktop", "Git", "Carrion", projectSlug),
-    path.join(home, "Desktop", "Git", "Projects", projectSlug),
-    path.join(home, "Desktop", "Git", projectSlug),
-  ];
+  const { projectsByName } = getAntigravityProjectRegistry();
+  const cfgProj = projectsByName.get(projectSlug);
 
   let foundPath = null;
   let isGitRepo = false;
   let gitRemote = null;
 
-  // Pass 1: Prefer a candidate directory that is an actual Git repository (.git exists)
-  for (const dir of candidateDirs) {
-    try {
-      if (fs.existsSync(dir) && fs.statSync(dir).isDirectory() && fs.existsSync(path.join(dir, ".git"))) {
-        foundPath = dir;
-        isGitRepo = true;
-        try {
-          gitRemote =
-            execSync(`git -C "${dir}" config --get remote.origin.url`, {
-              encoding: "utf8",
-              stdio: ["ignore", "pipe", "ignore"],
-            }).trim() || null;
-        } catch {}
-        break;
-      }
-    } catch {}
-  }
-
-  // Pass 2: Fallback to an existing directory that has more than just .gemini
-  if (!foundPath) {
-    for (const dir of candidateDirs) {
+  if (cfgProj) {
+    for (const fl of cfgProj.folders) {
       try {
-        if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
-          const entries = fs.readdirSync(dir).filter((e) => e !== ".gemini" && e !== ".DS_Store");
-          if (entries.length > 0) {
-            foundPath = dir;
+        if (fs.existsSync(fl.path) && fs.statSync(fl.path).isDirectory()) {
+          foundPath = fl.path;
+          if (fs.existsSync(path.join(fl.path, ".git"))) {
+            isGitRepo = true;
+            try {
+              gitRemote =
+                execSync(`git -C "${fl.path}" config --get remote.origin.url`, {
+                  encoding: "utf8",
+                  stdio: ["ignore", "pipe", "ignore"],
+                }).trim() || null;
+            } catch {}
             break;
           }
         }
       } catch {}
+    }
+    if (!foundPath) {
+      foundPath = cfgProj.primaryPath;
+      isGitRepo = Boolean(cfgProj.isGitFolder);
     }
   }
 
@@ -304,78 +430,87 @@ function resolveRepoMetadata(projectSlug) {
 }
 
 /**
- * Extracts all repository candidates and weights from a block of text (file paths, worktrees, or workspace headers).
+ * Matches a single filesystem path or file:// URI against Antigravity's configured project folders.
  */
-function extractProjectsFromText(text) {
+function matchConfiguredProjectFromPath(rawPath) {
+  const cleanPath = fileUriToPath(rawPath);
+  if (!cleanPath) return null;
+
+  const { folderMatchers, projectsByName } = getAntigravityProjectRegistry();
+
+  // 1. Exact or prefix match against configured project folders (sorted primary & longest path first)
+  for (const m of folderMatchers) {
+    if (cleanPath === m.path || cleanPath.startsWith(m.path + "/")) {
+      return m.project;
+    }
+  }
+
+  // 2. Match worktree paths ~/.gemini/antigravity/worktrees/<projectName>/... if projectName is in .gemini/config/projects
+  const wtMatch = cleanPath.match(/\/\.gemini\/antigravity\/worktrees\/([^/]+)/);
+  if (wtMatch && projectsByName.has(wtMatch[1])) {
+    return wtMatch[1];
+  }
+
+  // 3. Check if any path segment matches an actual non-parent project name from .gemini/config/projects
+  if (!cleanPath.includes("/.gemini/")) {
+    const segments = cleanPath.split("/").filter(Boolean);
+    for (let i = segments.length - 1; i >= 0; i--) {
+      const candidate = projectsByName.get(segments[i]);
+      if (candidate && !candidate.isParentOfConfiguredProject) {
+        return candidate.name;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Finds configured Antigravity projects referenced inside a block of transcript text (CLI, 2.0, or IDE).
+ */
+function extractConfiguredProjectsFromText(text) {
   if (!text) return [];
+  const { folderMatchers, projectsByName } = getAntigravityProjectRegistry();
   const results = [];
 
-  // 1. Antigravity worktree paths: ~/.gemini/antigravity/worktrees/<repo>/<branch>
-  const worktreeRegex = /\/\.gemini\/antigravity\/worktrees\/([a-zA-Z0-9._-]+)\//g;
+  // 1. Check explicit Command Working Directory header (2.0 / CLI) or Active Document header (IDE)
+  const headerRegex = /(?:Command Working Directory|Active Document):\s*(\/[^\n<\r(]+)/g;
   let match;
+  while ((match = headerRegex.exec(text)) !== null) {
+    const proj = matchConfiguredProjectFromPath(match[1].trim());
+    if (proj) {
+      results.push({ project: proj, weight: 8 });
+    }
+  }
+
+  // 2. Check configured primary project folder paths appearing in text
+  for (const m of folderMatchers) {
+    if (!m.isPrimary) continue;
+    if (text.includes(m.path)) {
+      results.push({ project: m.project, weight: 5 });
+    }
+  }
+
+  // 3. Check file paths in text against configured projects (handles IDE sessions or moved project folders)
+  const pathRegex = /\/Users\/[^\s"\\<>`')]+/g;
+  while ((match = pathRegex.exec(text)) !== null) {
+    const p = match[0];
+    if (p.includes("/.gemini/")) continue;
+    const proj = matchConfiguredProjectFromPath(p);
+    if (proj) {
+      results.push({ project: proj, weight: 3 });
+    }
+  }
+
+  // 4. Check worktree paths for configured projects
+  const worktreeRegex = /\/\.gemini\/antigravity\/worktrees\/([a-zA-Z0-9._-]+)\//g;
   while ((match = worktreeRegex.exec(text)) !== null) {
-    if (!isInvalidProjectCandidate(match[1])) {
-      results.push({ project: match[1], weight: 4 });
-    }
-  }
-
-  // 2. Explicit Command Working Directory / Active Workspaces headers
-  const cwdRegex = /Command Working Directory:\s*(\/[^\n<\r]+)/g;
-  while ((match = cwdRegex.exec(text)) !== null) {
-    const p = extractSingleRepoFromPath(match[1].trim());
-    if (p) results.push({ project: p, weight: 6 });
-  }
-
-  // 3. Nested org folders: /Git/Carrion/<repo> or /Git/Projects/<repo>
-  const nestedRegex = /\/(?:Desktop\/)?Git\/(?:Carrion|Projects)\/([a-zA-Z0-9._-]+)/g;
-  while ((match = nestedRegex.exec(text)) !== null) {
-    if (!isInvalidProjectCandidate(match[1])) {
-      results.push({ project: match[1], weight: 4 });
-    }
-  }
-
-  // 4. Direct /Git/<repo> paths
-  const directGitRegex = /\/(?:Desktop\/)?Git\/([a-zA-Z0-9._-]+)(?:\/([a-zA-Z0-9._-]+))?/g;
-  while ((match = directGitRegex.exec(text)) !== null) {
-    const first = match[1];
-    const second = match[2];
-    if (first === "Carrion" || first === "Projects") {
-      if (second && !isInvalidProjectCandidate(second)) {
-        results.push({ project: second, weight: 4 });
-      }
-      continue;
-    }
-    if (first === "plugins") {
-      // Attribute to actual sub-plugin repo if inside a plugin folder, otherwise "plugins"
-      if (second && (second === "token-tracker-plugin" || second === "fullstack-cloud-plugin")) {
-        results.push({ project: "plugins", weight: 4 });
-      } else {
-        results.push({ project: "plugins", weight: 4 });
-      }
-      continue;
-    }
-    if (!isInvalidProjectCandidate(first)) {
-      results.push({ project: first, weight: 3 });
+    if (projectsByName.has(match[1])) {
+      results.push({ project: match[1], weight: 5 });
     }
   }
 
   return results;
-}
-
-function extractSingleRepoFromPath(rawPath) {
-  if (!rawPath) return null;
-  const wt = rawPath.match(/\/\.gemini\/antigravity\/worktrees\/([a-zA-Z0-9._-]+)/);
-  if (wt && !isInvalidProjectCandidate(wt[1])) return wt[1];
-
-  const nested = rawPath.match(/\/(?:Desktop\/)?Git\/(?:Carrion|Projects)\/([a-zA-Z0-9._-]+)/);
-  if (nested && !isInvalidProjectCandidate(nested[1])) return nested[1];
-
-  const direct = rawPath.match(/\/(?:Desktop\/)?Git\/([a-zA-Z0-9._-]+)/);
-  if (direct && !isInvalidProjectCandidate(direct[1])) return direct[1];
-
-  const base = path.basename(rawPath);
-  if (!isInvalidProjectCandidate(base)) return base;
-  return null;
 }
 
 function cleanUserPromptTitle(rawContent) {
@@ -441,6 +576,12 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
     return null;
   }
 
+  const { projectsById, conversationDbMap } = getAntigravityProjectRegistry();
+  const dbRow = conversationDbMap.get(conversationId) || null;
+  const surface =
+    hookMeta.surface ||
+    (transcriptPath.includes("antigravity-ide") ? "IDE" : "2.0 / CLI");
+
   const content = fs.readFileSync(transcriptPath, "utf8");
   const lines = content.split("\n").filter((l) => l.trim().length > 0);
 
@@ -459,12 +600,41 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
       ? normalizeModelName(hookMeta.modelName)
       : null;
   const projectVoteCounts = new Map();
-  let parentConversationId = null;
+  let parentConversationId =
+    dbRow?.parent_conversation_id && dbRow.parent_conversation_id !== conversationId
+      ? dbRow.parent_conversation_id
+      : null;
 
+  // 1. Seed project from Antigravity's official project_id & workspace_uris in conversation_summaries.db
+  const dbConfiguredProject =
+    dbRow && dbRow.project_id && projectsById.has(dbRow.project_id)
+      ? projectsById.get(dbRow.project_id)
+      : null;
+
+  if (dbConfiguredProject && !dbConfiguredProject.isParentOfConfiguredProject) {
+    projectVoteCounts.set(
+      dbConfiguredProject.name,
+      (projectVoteCounts.get(dbConfiguredProject.name) || 0) + 50
+    );
+  }
+
+  if (dbRow && dbRow.workspace_uris) {
+    try {
+      const uris = JSON.parse(dbRow.workspace_uris);
+      if (Array.isArray(uris)) {
+        for (const u of uris) {
+          const p = matchConfiguredProjectFromPath(u);
+          if (p) projectVoteCounts.set(p, (projectVoteCounts.get(p) || 0) + 20);
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Seed from Stop hook workspacePaths payload
   if (Array.isArray(hookMeta.workspacePaths)) {
     for (const wp of hookMeta.workspacePaths) {
-      const p = extractSingleRepoFromPath(wp);
-      if (p) projectVoteCounts.set(p, (projectVoteCounts.get(p) || 0) + 8);
+      const p = matchConfiguredProjectFromPath(wp);
+      if (p) projectVoteCounts.set(p, (projectVoteCounts.get(p) || 0) + 25);
     }
   }
 
@@ -516,33 +686,19 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
       if (!title) {
         title = cleanUserPromptTitle(step.content);
       }
-      const senderMatch = step.content.match(/sender=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+      const senderMatch = step.content.match(
+        /sender=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
+      );
       if (senderMatch && senderMatch[1] && senderMatch[1] !== conversationId) {
         parentConversationId = senderMatch[1];
       }
     }
 
-    if (typeof step.content === "string") {
-      // Do not vote on CONVERSATION_HISTORY summaries which mention other sessions
-      if (step.type !== "CONVERSATION_HISTORY") {
-        const matches = extractProjectsFromText(step.content);
-        const mult = step.type === "SYSTEM_MESSAGE" ? 1 : 2;
-        for (const m of matches) {
-          projectVoteCounts.set(m.project, (projectVoteCounts.get(m.project) || 0) + m.weight * mult);
-        }
-      }
-    }
-
-    if (typeof step.thinking === "string") {
-      const matches = extractProjectsFromText(step.thinking);
+    if (typeof step.content === "string" && step.type !== "CONVERSATION_HISTORY") {
+      const matches = extractConfiguredProjectsFromText(step.content);
+      const mult = step.type === "SYSTEM_MESSAGE" ? 1 : 2;
       for (const m of matches) {
-        projectVoteCounts.set(m.project, (projectVoteCounts.get(m.project) || 0) + m.weight);
-      }
-      if (/basket-app/i.test(step.thinking)) {
-        projectVoteCounts.set("basket-app", (projectVoteCounts.get("basket-app") || 0) + 2);
-      }
-      if (/blessed[\s-]aluminum/i.test(step.thinking)) {
-        projectVoteCounts.set("blessed-aluminum", (projectVoteCounts.get("blessed-aluminum") || 0) + 2);
+        projectVoteCounts.set(m.project, (projectVoteCounts.get(m.project) || 0) + m.weight * mult);
       }
     }
 
@@ -617,9 +773,9 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
             }
           }
           const argsStr = JSON.stringify(tc.args || {});
-          const matches = extractProjectsFromText(argsStr);
+          const matches = extractConfiguredProjectsFromText(argsStr);
           for (const m of matches) {
-            projectVoteCounts.set(m.project, (projectVoteCounts.get(m.project) || 0) + m.weight * 3);
+            projectVoteCounts.set(m.project, (projectVoteCounts.get(m.project) || 0) + m.weight * 2);
           }
         }
       }
@@ -627,11 +783,18 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
   }
 
   let project = "general";
-  let bestScore = 0;
-  for (const [proj, score] of projectVoteCounts.entries()) {
-    if (score > bestScore) {
-      bestScore = score;
-      project = proj;
+  if (dbConfiguredProject && !dbConfiguredProject.isParentOfConfiguredProject) {
+    project = dbConfiguredProject.name;
+  } else {
+    let bestScore = 0;
+    for (const [proj, score] of projectVoteCounts.entries()) {
+      if (score > bestScore) {
+        bestScore = score;
+        project = proj;
+      }
+    }
+    if (project === "general" && dbConfiguredProject) {
+      project = dbConfiguredProject.name;
     }
   }
 
@@ -644,7 +807,8 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
   return {
     conversationId,
     parentConversationId,
-    title: title || `Session ${conversationId.slice(0, 8)}`,
+    surface,
+    title: title || dbRow?.title || `Session ${conversationId.slice(0, 8)}`,
     project,
     model: detectedModel || "Gemini 2.5 Pro (Default)",
     hasTokenTelemetry: totalTokens > 0,
@@ -746,18 +910,19 @@ function buildUserSummary(userMeta, conversationsMap) {
       (byProject[proj].savedByCacheUsd + (conv.savedByCacheUsd || 0)).toFixed(6)
     );
 
-    const modelBreakdowns = conv.byModelInConv && Object.keys(conv.byModelInConv).length > 0
-      ? conv.byModelInConv
-      : {
-          [conv.model || "Gemini 2.5 Pro (Default)"]: {
-            inputTokens: conv.inputTokens,
-            cacheReadTokens: conv.cacheReadTokens,
-            outputTokens: conv.outputTokens,
-            turns: conv.turnCount,
-            estimatedCostUsd: conv.estimatedCostUsd || 0,
-            savedByCacheUsd: conv.savedByCacheUsd || 0,
-          },
-        };
+    const modelBreakdowns =
+      conv.byModelInConv && Object.keys(conv.byModelInConv).length > 0
+        ? conv.byModelInConv
+        : {
+            [conv.model || "Gemini 2.5 Pro (Default)"]: {
+              inputTokens: conv.inputTokens,
+              cacheReadTokens: conv.cacheReadTokens,
+              outputTokens: conv.outputTokens,
+              turns: conv.turnCount,
+              estimatedCostUsd: conv.estimatedCostUsd || 0,
+              savedByCacheUsd: conv.savedByCacheUsd || 0,
+            },
+          };
 
     for (const [mod, mData] of Object.entries(modelBreakdowns)) {
       if (!byModel[mod]) {
@@ -777,7 +942,8 @@ function buildUserSummary(userMeta, conversationsMap) {
         };
       }
       byModel[mod].conversations += 1;
-      const mTotalTokens = (mData.inputTokens || 0) + (mData.cacheReadTokens || 0) + (mData.outputTokens || 0);
+      const mTotalTokens =
+        (mData.inputTokens || 0) + (mData.cacheReadTokens || 0) + (mData.outputTokens || 0);
       if (mTotalTokens > 0) {
         byModel[mod].trackedConversations += 1;
       }
@@ -845,10 +1011,12 @@ function buildUserSummary(userMeta, conversationsMap) {
   const totalTokens = totalInputTokens + totalCacheReadTokens + totalOutputTokens;
   const totalContextTokens = totalInputTokens + totalCacheReadTokens;
   const cacheHitRate =
-    totalContextTokens > 0 ? Number(((totalCacheReadTokens / totalContextTokens) * 100).toFixed(2)) : 0;
+    totalContextTokens > 0
+      ? Number(((totalCacheReadTokens / totalContextTokens) * 100).toFixed(2))
+      : 0;
 
   return {
-    schemaVersion: "1.5.0",
+    schemaVersion: "1.6.0",
     lastSyncedAt: new Date().toISOString(),
     telemetryStartDate: "2026-10-09",
     user: userMeta,
@@ -919,7 +1087,7 @@ function writePerRepoReports(summary) {
       const repoConvs = summary.conversations.filter((c) => c.project === proj.project);
       const reportPath = path.join(repoGeminiDir, "token-usage.json");
       const payload = {
-        schemaVersion: "1.5.0",
+        schemaVersion: "1.6.0",
         generatedAt: new Date().toISOString(),
         project: proj.project,
         repoPath: proj.repoPath,
@@ -942,6 +1110,7 @@ export function runSync({
   writeRepoReports = false,
 } = {}) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
+  getAntigravityProjectRegistry(true);
   const userMeta = getUserIdentity();
   const userFilePath = path.join(DATA_DIR, `${userMeta.userId}.json`);
 
@@ -959,16 +1128,26 @@ export function runSync({
     backfill = true;
   }
 
-  if (backfill && fs.existsSync(BRAIN_DIR)) {
-    const entries = fs.readdirSync(BRAIN_DIR, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const convId = entry.name;
-      const tPath = path.join(BRAIN_DIR, convId, ".system_generated", "logs", "transcript.jsonl");
-      if (fs.existsSync(tPath)) {
-        const parsed = parseTranscriptFile(tPath, convId, {});
-        if (parsed) {
-          existingConversationsMap[convId] = parsed;
+  // Scan both Antigravity 2.0 / CLI (~/.gemini/antigravity/brain) and Antigravity IDE (~/.gemini/antigravity-ide/brain)
+  if (backfill) {
+    for (const brainSource of BRAIN_DIRS) {
+      if (!fs.existsSync(brainSource.path)) continue;
+      const entries = fs.readdirSync(brainSource.path, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const convId = entry.name;
+        const tPath = path.join(
+          brainSource.path,
+          convId,
+          ".system_generated",
+          "logs",
+          "transcript.jsonl"
+        );
+        if (fs.existsSync(tPath)) {
+          const parsed = parseTranscriptFile(tPath, convId, { surface: brainSource.surface });
+          if (parsed) {
+            existingConversationsMap[convId] = parsed;
+          }
         }
       }
     }
@@ -977,7 +1156,9 @@ export function runSync({
   if (hookPayload && hookPayload.conversationId) {
     const convId = hookPayload.conversationId;
     const candidatePaths = [
-      path.join(BRAIN_DIR, convId, ".system_generated", "logs", "transcript.jsonl"),
+      ...BRAIN_DIRS.map((b) =>
+        path.join(b.path, convId, ".system_generated", "logs", "transcript.jsonl")
+      ),
       hookPayload.transcriptPath,
     ].filter(Boolean);
 
