@@ -16,8 +16,9 @@ This skill powers the `token-tracker` plugin (`~/.gemini/config/plugins/token-tr
    - Scans every existing conversation directory under `~/.gemini/antigravity/brain/<conversationId>/.system_generated/logs/transcript.jsonl`.
    - Resolves actual project attribution directly from Antigravity's `.gemini/config/projects/*.json` configuration and `conversation_summaries.db` (filtering out non-project entries like `outside-of-project` or virtual sidecars).
    - Extracts `input_tokens`, `cache_read_tokens`, `output_tokens`, prompt count, model turns, tool call counts, model name, and repository name.
+   - Records granular **per-prompt (`prompts[]`)** and **per-turn (`turns[]`)** token telemetry, and automatically merges child **subagent sessions** into their root parent conversation, interleaving subagent turns chronologically inside the parent prompt that spawned them.
 3. **Numbers-Only JSON Metrics Export**:
-   - The dashboard includes an **Export Metrics JSON** button that downloads `token-tracker-metrics-YYYY-MM-DD.json` containing strictly aggregated numeric metrics (`totals`, `byRepository`, `byModel`, `daily`) with zero chat titles, prompts, or local file paths so it can be safely imported into external apps.
+   - The dashboard includes an **Export Metrics JSON** button that downloads `token-tracker-metrics-YYYY-MM-DD.json` containing strictly aggregated numeric metrics (`totals`, `byRepository`, `byModel`, `daily`, and anonymized `conversationsNumeric` with nested per-prompt and per-turn token numbers) with zero chat titles, prompts, or local file paths so it can be safely imported into external apps.
 
 ## 2. Commands
 

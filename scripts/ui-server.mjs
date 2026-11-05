@@ -36,12 +36,16 @@ function loadAllUsers() {
 }
 
 /**
- * Builds a clean numbers-only JSON payload with zero chat prompts, titles, or local paths.
+ * Builds a clean numbers-only JSON payload with zero chat prompts, titles, or local paths,
+ * including conversation, prompt-level, and turn-level numeric telemetry.
+ *
+ * @param {object} userProfile - Aggregated user profile from data/users/<userId>.json
+ * @returns {object} Sanitized numbers-only metrics payload
  */
 function buildMetricsOnlyPayload(userProfile) {
   if (!userProfile) return {};
   return {
-    schemaVersion: "2.0.0",
+    schemaVersion: "2.1.0",
     exportedAt: new Date().toISOString(),
     telemetryStartDate: userProfile.telemetryStartDate || "2026-10-09",
     developer: {
@@ -56,8 +60,11 @@ function buildMetricsOnlyPayload(userProfile) {
       conversations: p.conversations || 0,
       trackedConversations: p.trackedConversations || 0,
       legacyConversationsPreTelemetry: p.legacyConversationsPreTelemetry || 0,
+      prompts: p.prompts || 0,
+      trackedPrompts: p.trackedPrompts || 0,
       turns: p.turns || 0,
       trackedTurns: p.trackedTurns || 0,
+      subagentRuns: p.subagentRuns || 0,
       inputTokens: p.inputTokens || 0,
       cacheReadTokens: p.cacheReadTokens || 0,
       outputTokens: p.outputTokens || 0,
@@ -84,6 +91,56 @@ function buildMetricsOnlyPayload(userProfile) {
       savedByCacheUsd: m.savedByCacheUsd || 0,
     })),
     daily: userProfile.daily || [],
+    conversationsNumeric: (userProfile.conversations || [])
+      .filter((c) => (c.totalTokens || 0) > 0)
+      .map((c) => ({
+        conversationIdShort: String(c.conversationId || "").slice(0, 8),
+        repository: c.project || "general",
+        model: c.model,
+        startedAt: c.startedAt,
+        updatedAt: c.updatedAt,
+        promptCount: c.promptCount || 0,
+        turnCount: c.turnCount || 0,
+        mergedSubagentCount: c.mergedSubagentCount || 0,
+        toolCallCount: c.toolCallCount || 0,
+        inputTokens: c.inputTokens || 0,
+        cacheReadTokens: c.cacheReadTokens || 0,
+        outputTokens: c.outputTokens || 0,
+        totalTokens: c.totalTokens || 0,
+        estimatedCostUsd: c.estimatedCostUsd || 0,
+        savedByCacheUsd: c.savedByCacheUsd || 0,
+        prompts: (c.prompts || []).map((pr) => ({
+          promptIndex: pr.promptIndex,
+          timestamp: pr.timestamp,
+          model: pr.model,
+          turnCount: pr.turnCount || 0,
+          subagentRunCount: pr.subagentRunCount || 0,
+          subagentTurnCount: pr.subagentTurnCount || 0,
+          toolCallCount: pr.toolCallCount || 0,
+          inputTokens: pr.inputTokens || 0,
+          cacheReadTokens: pr.cacheReadTokens || 0,
+          outputTokens: pr.outputTokens || 0,
+          totalTokens: pr.totalTokens || 0,
+          estimatedCostUsd: pr.estimatedCostUsd || 0,
+          savedByCacheUsd: pr.savedByCacheUsd || 0,
+          turns: (pr.turns || []).map((t) => ({
+            turnIndex: t.turnIndex,
+            promptTurnIndex: t.promptTurnIndex,
+            timestamp: t.timestamp,
+            model: t.model,
+            isSubagent: Boolean(t.isSubagent),
+            subagentRole: t.subagentRole || null,
+            toolCalls: t.toolCalls || 0,
+            isLongContext: Boolean(t.isLongContext),
+            inputTokens: t.inputTokens || 0,
+            cacheReadTokens: t.cacheReadTokens || 0,
+            outputTokens: t.outputTokens || 0,
+            totalTokens: t.totalTokens || 0,
+            estimatedCostUsd: t.estimatedCostUsd || 0,
+            savedByCacheUsd: t.savedByCacheUsd || 0,
+          })),
+        })),
+      })),
   };
 }
 

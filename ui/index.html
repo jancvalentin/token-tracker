@@ -412,6 +412,172 @@
       stroke-linejoin: round;
       flex-shrink: 0;
     }
+
+    /* Interactive Drill-Down Rows (Conversation -> Prompts -> Chronological Turns) */
+    tr.conv-row {
+      cursor: pointer;
+      transition: background 0.12s ease;
+    }
+    tr.conv-row.expanded td {
+      background: rgba(138, 180, 248, 0.08);
+      border-bottom-color: rgba(138, 180, 248, 0.25);
+    }
+    .chevron-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      color: var(--muted);
+      transition: transform 0.16s ease, color 0.16s ease, background 0.16s ease;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    tr.conv-row:hover .chevron-icon {
+      color: var(--accent);
+      background: rgba(138, 180, 248, 0.12);
+    }
+    tr.conv-row.expanded .chevron-icon,
+    .prompt-card.expanded .prompt-chevron {
+      transform: rotate(90deg);
+      color: var(--accent);
+    }
+
+    tr.conv-detail-row td {
+      background: #1a1b1e;
+      padding: 14px 18px;
+      white-space: normal;
+    }
+    tr.conv-detail-row:hover td {
+      background: #1a1b1e;
+    }
+
+    .drilldown-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .drilldown-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .subagent-summary-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: rgba(197, 138, 249, 0.07);
+      border: 1px solid rgba(197, 138, 249, 0.24);
+      font-size: 0.74rem;
+    }
+
+    .prompt-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      transition: border-color 0.15s ease;
+    }
+    .prompt-card:hover {
+      border-color: rgba(138, 180, 248, 0.45);
+    }
+    .prompt-card.expanded {
+      border-color: var(--accent);
+    }
+    .prompt-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 12px;
+      cursor: pointer;
+      user-select: none;
+      flex-wrap: wrap;
+    }
+    .prompt-card-header:hover {
+      background: var(--surface-hover);
+    }
+    .prompt-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex: 1;
+    }
+    .prompt-chevron {
+      display: inline-flex;
+      color: var(--muted);
+      transition: transform 0.15s ease;
+      flex-shrink: 0;
+    }
+    .prompt-preview {
+      font-size: 0.78rem;
+      color: var(--text);
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 520px;
+    }
+    .prompt-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.74rem;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .turns-container {
+      border-top: 1px solid var(--border);
+      background: #202124;
+      padding: 8px 10px;
+      overflow-x: auto;
+    }
+    table.turns-table {
+      width: 100%;
+      min-width: 680px;
+      border-collapse: collapse;
+      font-size: 0.73rem;
+    }
+    table.turns-table th {
+      background: #28292c;
+      font-size: 0.65rem;
+      padding: 6px 9px;
+      position: static;
+    }
+    table.turns-table td {
+      padding: 6px 9px;
+      border-bottom: 1px solid rgba(60, 64, 67, 0.55);
+    }
+    table.turns-table tr:last-child td {
+      border-bottom: none;
+    }
+    table.turns-table tr.subagent-turn-row td {
+      background: rgba(197, 138, 249, 0.06);
+    }
+    .tool-pill {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.67rem;
+      margin-right: 4px;
+    }
   </style>
 </head>
 <body>
@@ -581,7 +747,8 @@
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
           </svg>
-          <span class="panel-title">Conversation Token Ledger</span>
+          <span class="panel-title">Conversation, Prompt &amp; Turn Token Ledger</span>
+          <span style="font-size: 0.72rem; color: var(--muted);">Click any conversation to inspect prompts &amp; chronological turns (including merged subagents)</span>
         </div>
         <input type="text" class="search-input" id="searchInput" placeholder="Search prompt title, project, or model..." />
       </div>
@@ -593,6 +760,7 @@
               <th>Repository</th>
               <th>Conversation Prompt / Title</th>
               <th>Model</th>
+              <th class="num">Prompts</th>
               <th class="num">Turns</th>
               <th class="num">Total Tokens</th>
               <th class="num">Cost</th>
@@ -610,8 +778,66 @@
       users: [],
       selectedProject: "all",
       searchQuery: "",
+      expandedConvs: new Set(),
+      expandedPrompts: new Set(),
       lastComputedMetrics: null,
     };
+
+    function escapeHtml(str) {
+      return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function fmtUsdFine(n) {
+      const val = Number(n || 0);
+      if (val === 0) return "$0.00";
+      if (val < 0.01) return "$" + val.toFixed(4);
+      if (val < 0.1) return "$" + val.toFixed(3);
+      return "$" + val.toFixed(2);
+    }
+
+    function fmtTimeShort(iso) {
+      if (!iso) return "-";
+      const m = String(iso).match(/T(\d{2}:\d{2}:\d{2})/);
+      return m ? m[1] : String(iso).slice(11, 19) || "-";
+    }
+
+    function toggleConvExpand(convId) {
+      if (state.expandedConvs.has(convId)) {
+        state.expandedConvs.delete(convId);
+      } else {
+        state.expandedConvs.add(convId);
+        // Auto-expand Prompt #1 when a conversation with 1-3 prompts is opened for the first time
+        const conv = findConvById(convId);
+        if (conv && Array.isArray(conv.prompts) && conv.prompts.length > 0 && conv.prompts.length <= 3) {
+          state.expandedPrompts.add(`${convId}:1`);
+        }
+      }
+      render();
+    }
+
+    function togglePromptExpand(convId, promptIndex, ev) {
+      if (ev) ev.stopPropagation();
+      const key = `${convId}:${promptIndex}`;
+      if (state.expandedPrompts.has(key)) {
+        state.expandedPrompts.delete(key);
+      } else {
+        state.expandedPrompts.add(key);
+      }
+      render();
+    }
+
+    function findConvById(convId) {
+      for (const u of state.users) {
+        for (const c of u.conversations || []) {
+          if (c.conversationId === convId) return c;
+        }
+      }
+      return null;
+    }
 
     function getModelRatesObj(mod) {
       const lower = String(mod || "").toLowerCase();
@@ -742,6 +968,7 @@
         cacheReadTokens = 0,
         outputTokens = 0,
         prompts = 0,
+        trackedPrompts = 0,
         turns = 0,
         trackedTurns = 0,
         legacyTurnsPreTelemetry = 0,
@@ -749,6 +976,7 @@
         legacyConversationsPreTelemetry = 0,
         toolCalls = 0,
         subagents = 0,
+        mergedSubagentRuns = 0,
         cost = 0,
         savedByCache = 0;
 
@@ -761,6 +989,7 @@
         turns += c.turnCount || 0;
         if (cTot > 0) {
           trackedConversations += 1;
+          trackedPrompts += c.promptCount || 0;
           trackedTurns += c.turnCount || 0;
         } else {
           legacyConversationsPreTelemetry += 1;
@@ -768,6 +997,7 @@
         }
         toolCalls += c.toolCallCount || 0;
         subagents += c.subagentCount || 0;
+        mergedSubagentRuns += c.mergedSubagentCount || 0;
         cost += c.estimatedCostUsd || 0;
         savedByCache += c.savedByCacheUsd || 0;
       }
@@ -777,17 +1007,21 @@
         inputTokens + cacheReadTokens > 0
           ? Number(((cacheReadTokens / (inputTokens + cacheReadTokens)) * 100).toFixed(2))
           : 0;
+      const avgCostPerPrompt = trackedPrompts > 0 ? cost / trackedPrompts : 0;
+      const avgCostPerTurn = trackedTurns > 0 ? cost / trackedTurns : 0;
+      const avgTurnsPerPrompt = prompts > 0 ? (turns / prompts).toFixed(1) : "0.0";
 
       document.getElementById("kpiTotalTokens").textContent = fmtCompact(totalTokens);
       document.getElementById("kpiTokenSplit").textContent =
         `${fmtCompact(inputTokens)} in • ${fmtCompact(cacheReadTokens)} cached • ${fmtCompact(outputTokens)} out`;
       document.getElementById("kpiCost").textContent = fmtUsd(cost);
       document.getElementById("kpiCostSub").textContent =
-        `${fmtUsd(trackedConversations ? cost / trackedConversations : 0)} avg per tracked session (${trackedConversations} tracked)`;
+        `${fmtUsd(avgCostPerPrompt)} / prompt • ${fmtUsdFine(avgCostPerTurn)} / turn (${trackedConversations} tracked chats)`;
       document.getElementById("kpiCacheRate").textContent = `${cacheHitPct.toFixed(2)}%`;
       document.getElementById("kpiCacheSaved").textContent = `Est. ${fmtUsd(savedByCache)} saved via cache discount`;
       document.getElementById("kpiSessions").textContent = fmtNum(allConvs.length);
-      document.getElementById("kpiTurns").textContent = `${fmtNum(prompts)} prompts • ${fmtNum(turns)} turns`;
+      document.getElementById("kpiTurns").textContent =
+        `${fmtNum(prompts)} prompts • ${fmtNum(turns)} turns (${avgTurnsPerPrompt}/prompt • ${fmtNum(mergedSubagentRuns)} subagents merged)`;
 
       const dailySeries = renderDailyChart(allConvs);
       const { modRows, projRows } = renderModelAndProjectTables(allConvs);
@@ -795,7 +1029,7 @@
 
       // Build numbers-only export payload (strictly zero chat titles, prompts, or local paths)
       state.lastComputedMetrics = {
-        schemaVersion: "2.0.0",
+        schemaVersion: "2.1.0",
         exportedAt: new Date().toISOString(),
         telemetryStartDate: "2026-10-09",
         filter: {
@@ -810,11 +1044,13 @@
           trackedConversations,
           legacyConversationsPreTelemetry,
           prompts,
+          trackedPrompts,
           turns,
           trackedTurns,
           legacyTurnsPreTelemetry,
           toolCalls,
           subagents,
+          mergedSubagentRuns,
           inputTokens,
           cacheReadTokens,
           outputTokens,
@@ -822,14 +1058,19 @@
           cacheHitRatePct: cacheHitPct,
           estimatedCostUsd: Number(cost.toFixed(2)),
           savedByCacheUsd: Number(savedByCache.toFixed(2)),
+          avgCostPerPromptUsd: Number(avgCostPerPrompt.toFixed(4)),
+          avgCostPerTurnUsd: Number(avgCostPerTurn.toFixed(4)),
+          avgTurnsPerPrompt: Number(avgTurnsPerPrompt),
         },
         byRepository: projRows.map((p) => ({
           repository: p.project,
           conversations: p.sessions,
           trackedConversations: p.trackedSessions,
           legacyConversationsPreTelemetry: p.legacySessions,
+          prompts: p.prompts,
           turns: p.turns,
           trackedTurns: p.trackedTurns,
+          subagentRuns: p.subagents,
           inputTokens: p.inT,
           cacheReadTokens: p.cacheT,
           outputTokens: p.outT,
@@ -866,6 +1107,44 @@
           totalTokens: d.input + d.cache + d.output,
           estimatedCostUsd: Number(d.cost.toFixed(4)),
           savedByCacheUsd: Number(d.saved.toFixed(4)),
+        })),
+        conversationsNumeric: allConvs.map((c, idx) => ({
+          sessionIndex: idx + 1,
+          date: (c.updatedAt || "").slice(0, 10),
+          repository: c.project,
+          model: c.model,
+          prompts: c.promptCount || 0,
+          turns: c.turnCount || 0,
+          toolCalls: c.toolCallCount || 0,
+          mergedSubagents: c.mergedSubagentCount || 0,
+          inputTokens: c.inputTokens || 0,
+          cacheReadTokens: c.cacheReadTokens || 0,
+          outputTokens: c.outputTokens || 0,
+          totalTokens: c.totalTokens || 0,
+          estimatedCostUsd: Number((c.estimatedCostUsd || 0).toFixed(4)),
+          savedByCacheUsd: Number((c.savedByCacheUsd || 0).toFixed(4)),
+          promptsNumeric: (c.prompts || []).map((pr) => ({
+            promptIndex: pr.promptIndex,
+            turns: pr.turnCount || 0,
+            subagentTurns: pr.subagentTurnCount || pr.subagentTurns || 0,
+            toolCalls: pr.toolCallCount || 0,
+            inputTokens: pr.inputTokens || 0,
+            cacheReadTokens: pr.cacheReadTokens || 0,
+            outputTokens: pr.outputTokens || 0,
+            totalTokens: pr.totalTokens || 0,
+            estimatedCostUsd: Number((pr.estimatedCostUsd || 0).toFixed(4)),
+            turnsNumeric: (pr.turns || []).map((t) => ({
+              turnIndex: t.turnIndex,
+              isSubagent: Boolean(t.isSubagent),
+              model: t.model,
+              toolCalls: t.toolCalls || 0,
+              inputTokens: t.inputTokens || 0,
+              cacheReadTokens: t.cacheReadTokens || 0,
+              outputTokens: t.outputTokens || 0,
+              totalTokens: t.totalTokens || 0,
+              estimatedCostUsd: Number((t.estimatedCostUsd || 0).toFixed(4)),
+            })),
+          })),
         })),
       };
     }
@@ -959,8 +1238,10 @@
             sessions: 0,
             trackedSessions: 0,
             legacySessions: 0,
+            prompts: 0,
             turns: 0,
             trackedTurns: 0,
+            subagents: 0,
             inT: 0,
             cacheT: 0,
             outT: 0,
@@ -970,7 +1251,9 @@
           };
         }
         byProj[p].sessions += 1;
+        byProj[p].prompts += c.promptCount || 0;
         byProj[p].turns += c.turnCount || 0;
+        byProj[p].subagents += c.mergedSubagentCount || 0;
         if ((c.totalTokens || 0) > 0) {
           byProj[p].trackedSessions += 1;
           byProj[p].trackedTurns += c.turnCount || 0;
@@ -1023,7 +1306,7 @@
                 <strong style="color:var(--green);font-size:0.82rem;">${fmtUsd(p.cost)}</strong>
               </div>
               <div class="repo-card-bottom">
-                <span>${fmtNum(p.sessions)} sessions • ${fmtNum(p.turns)} turns</span>
+                <span>${fmtNum(p.sessions)} chats • ${fmtNum(p.prompts)} prompts • ${fmtNum(p.turns)} turns</span>
                 <strong style="color:var(--text);">${fmtCompact(p.tokens)}</strong>
               </div>
             </div>
@@ -1041,19 +1324,182 @@
           const dateStr = (c.updatedAt || "").slice(0, 10);
           const isFlash = String(c.model || "").toLowerCase().includes("flash");
           const badgeClass = isFlash ? "badge badge-amber" : "badge badge-purple";
-          return `
-            <tr>
+          const isExpanded = state.expandedConvs.has(c.conversationId);
+          const subCount = c.mergedSubagentCount || 0;
+          const subBadgeHtml =
+            subCount > 0
+              ? `<span class="badge badge-purple" style="margin-left:6px;font-size:0.65rem;" title="${subCount} subagent conversation(s) merged chronologically into this chat">+${subCount} subagent${subCount > 1 ? "s" : ""}</span>`
+              : "";
+
+          const mainRow = `
+            <tr class="conv-row ${isExpanded ? "expanded" : ""}" onclick="toggleConvExpand('${c.conversationId}')">
               <td style="color:var(--muted);">${dateStr}</td>
-              <td><span class="badge">${c.project}</span></td>
-              <td class="cell-expand" title="${(c.title || "").replace(/"/g, "&quot;")}">
-                ${c.title}
+              <td><span class="badge">${escapeHtml(c.project)}</span></td>
+              <td class="cell-expand" title="${escapeHtml(c.title || "")}">
+                <span class="chevron">▶</span>${escapeHtml(c.title)}${subBadgeHtml}
               </td>
-              <td><span class="${badgeClass}">${c.model}</span></td>
+              <td><span class="${badgeClass}">${escapeHtml(c.model)}</span></td>
+              <td class="num">${fmtNum(c.promptCount || 0)}</td>
               <td class="num">${fmtNum(c.turnCount)}</td>
               <td class="num"><strong>${fmtCompact(c.totalTokens)}</strong></td>
               <td class="num" style="color:var(--green);"><strong>${fmtUsd(c.estimatedCostUsd)}</strong></td>
             </tr>
           `;
+
+          if (!isExpanded) return mainRow;
+
+          const promptList = Array.isArray(c.prompts) ? c.prompts : [];
+          const convAvgPromptCost = (c.promptCount || 0) > 0 ? (c.estimatedCostUsd || 0) / c.promptCount : 0;
+          const convAvgTurnCost = (c.turnCount || 0) > 0 ? (c.estimatedCostUsd || 0) / c.turnCount : 0;
+          const convCachePct =
+            (c.inputTokens || 0) + (c.cacheReadTokens || 0) > 0
+              ? (((c.cacheReadTokens || 0) / ((c.inputTokens || 0) + (c.cacheReadTokens || 0))) * 100).toFixed(1)
+              : "0.0";
+
+          const mergedSubStrip =
+            Array.isArray(c.mergedSubagents) && c.mergedSubagents.length > 0
+              ? `
+                <div class="subagent-summary-strip">
+                  <span><strong style="color:var(--purple);">Merged Subagents (${c.mergedSubagents.length}):</strong> Interleaved chronologically inside their spawning prompt</span>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    ${c.mergedSubagents
+                      .map(
+                        (s) =>
+                          `<span class="badge badge-purple" title="Subagent ID: ${escapeHtml(s.conversationId)}">↳ ${escapeHtml(s.role)} • ${s.turnCount}t • ${fmtCompact(s.totalTokens)} (${fmtUsd(s.estimatedCostUsd)})</span>`
+                      )
+                      .join("")}
+                  </div>
+                </div>
+              `
+              : "";
+
+          const promptsHtml =
+            promptList.length === 0
+              ? `<div style="color:var(--muted);font-size:0.8rem;padding:8px;">No granular prompt breakdown available for this session.</div>`
+              : promptList
+                  .map((p) => {
+                    const pKey = `${c.conversationId}:${p.promptIndex}`;
+                    const pExpanded = state.expandedPrompts.has(pKey);
+                    const pTime = fmtTimeShort(p.timestamp);
+                    const pSubTurns = p.subagentTurnCount || p.subagentTurns || 0;
+                    const pSubRuns = p.subagentRunCount || 0;
+                    const pSubBadge =
+                      pSubTurns > 0
+                        ? `<span class="badge badge-purple" style="font-size:0.65rem;">+${pSubRuns > 0 ? pSubRuns + " subagent" + (pSubRuns > 1 ? "s" : "") + " • " : ""}${pSubTurns} sub turn${pSubTurns > 1 ? "s" : ""}</span>`
+                        : "";
+                    const pSpawnedRoles =
+                      Array.isArray(p.spawnedSubagents) && p.spawnedSubagents.length > 0
+                        ? p.spawnedSubagents
+                            .map((sr) => `<span class="badge badge-purple" style="font-size:0.64rem;">↳ ${escapeHtml(sr.role)}</span>`)
+                            .join("")
+                        : "";
+
+                    const turnsRowsHtml = pExpanded
+                      ? `
+                        <div class="turns-container">
+                          <table class="turns-table">
+                            <thead>
+                              <tr>
+                                <th style="width:48px;">Turn</th>
+                                <th style="width:76px;">Time</th>
+                                <th style="width:210px;">Actor / Model</th>
+                                <th>Tools Executed</th>
+                                <th class="num">Uncached In</th>
+                                <th class="num">Cache Read</th>
+                                <th class="num">Output</th>
+                                <th class="num">Total Tokens</th>
+                                <th class="num">Turn Spend</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              ${(p.turns || [])
+                                .map((t) => {
+                                  const isSub = Boolean(t.isSubagent);
+                                  const rowCls = isSub ? "subagent-turn-row" : "";
+                                  const actorHtml = isSub
+                                    ? `<span class="badge badge-purple" style="font-size:0.65rem;" title="Subagent session ${escapeHtml(t.subagentId || "")}: ${escapeHtml(t.subagentTitle || "")}">↳ ${escapeHtml(t.subagentRole || "Subagent")} #${t.subagentTurnIndex || ""}</span> <span style="color:var(--muted);font-size:0.68rem;">${escapeHtml(t.model)}</span>`
+                                    : `<span class="badge" style="font-size:0.65rem;">Main</span> <span style="color:var(--muted);font-size:0.68rem;">${escapeHtml(t.model)}</span>`;
+                                  const longCtxBadge = t.isLongContext
+                                    ? `<span class="badge badge-amber" style="font-size:0.6rem;margin-left:4px;" title=">200k input context window (long-context tier pricing)">>200k</span>`
+                                    : "";
+                                  const toolsHtml =
+                                    Array.isArray(t.tools) && t.tools.length > 0
+                                      ? `<div class="tool-pills">${t.tools
+                                          .map((tn) => `<span class="tool-pill">${escapeHtml(tn)}</span>`)
+                                          .join("")}${t.toolCalls > t.tools.length ? `<span class="tool-pill">×${t.toolCalls}</span>` : ""}</div>`
+                                      : `<span style="color:var(--muted);">—</span>`;
+
+                                  return `
+                                    <tr class="${rowCls}">
+                                      <td style="color:var(--muted);font-family:monospace;">#${t.turnIndex}</td>
+                                      <td style="color:var(--muted);font-family:monospace;">${fmtTimeShort(t.timestamp)}</td>
+                                      <td>${actorHtml}${longCtxBadge}</td>
+                                      <td>${toolsHtml}</td>
+                                      <td class="num">${t.totalTokens > 0 ? fmtCompact(t.inputTokens) : "-"}</td>
+                                      <td class="num" style="color:var(--green);">${t.totalTokens > 0 ? fmtCompact(t.cacheReadTokens) : "-"}</td>
+                                      <td class="num">${t.totalTokens > 0 ? fmtCompact(t.outputTokens) : "-"}</td>
+                                      <td class="num"><strong>${t.totalTokens > 0 ? fmtCompact(t.totalTokens) : '<span style="color:var(--muted);font-weight:400;">Pre-telemetry</span>'}</strong></td>
+                                      <td class="num" style="color:var(--green);"><strong>${t.totalTokens > 0 ? fmtUsdFine(t.estimatedCostUsd) : "$0.00"}</strong></td>
+                                    </tr>
+                                  `;
+                                })
+                                .join("")}
+                            </tbody>
+                          </table>
+                        </div>
+                      `
+                      : "";
+
+                    return `
+                      <div class="prompt-card">
+                        <div class="prompt-card-header" onclick="togglePromptExpand('${c.conversationId}', ${p.promptIndex}, event)">
+                          <div class="prompt-card-title">
+                            <span class="chevron ${pExpanded ? "open" : ""}" style="${pExpanded ? "transform:rotate(90deg);color:var(--accent);" : ""}">▶</span>
+                            <span class="prompt-index-pill">Prompt #${p.promptIndex}</span>
+                            <span style="color:var(--muted);font-size:0.72rem;font-family:monospace;">${pTime}</span>
+                            <span class="prompt-text" title="${escapeHtml(p.text || p.promptPreview || "")}">${escapeHtml(p.text || p.promptPreview || "(System / Continuation)")}</span>
+                            ${pSpawnedRoles}
+                            ${pSubBadge}
+                          </div>
+                          <div class="prompt-metrics">
+                            <span><strong>${fmtNum(p.turnCount || 0)}</strong> turns</span>
+                            <span><strong>${fmtNum(p.toolCallCount || 0)}</strong> tools</span>
+                            <span><strong style="color:var(--accent);">${fmtCompact(p.totalTokens || 0)}</strong> tok</span>
+                            <span style="color:var(--green);"><strong>${fmtUsd(p.estimatedCostUsd || 0)}</strong></span>
+                          </div>
+                        </div>
+                        ${turnsRowsHtml}
+                      </div>
+                    `;
+                  })
+                  .join("");
+
+          return (
+            mainRow +
+            `
+            <tr class="conv-detail-row">
+              <td colspan="8">
+                <div class="conv-detail-box">
+                  <div class="conv-detail-header">
+                    <div class="conv-detail-meta">
+                      <span>Session ID: <code>${escapeHtml(c.conversationId.slice(0, 8))}</code></span>
+                      <span>Surface: <strong>${escapeHtml(c.surface || "antigravity")}</strong></span>
+                      <span>Prompts: <strong>${fmtNum(c.promptCount || 0)}</strong> (${fmtUsd(convAvgPromptCost)} avg/prompt)</span>
+                      <span>Turns: <strong>${fmtNum(c.turnCount || 0)}</strong> (${fmtUsdFine(convAvgTurnCost)} avg/turn)</span>
+                      <span>Tool Calls: <strong>${fmtNum(c.toolCallCount || 0)}</strong></span>
+                      <span>Cache Hit: <strong style="color:var(--green);">${convCachePct}%</strong> (Saved ${fmtUsd(c.savedByCacheUsd || 0)})</span>
+                    </div>
+                    <span style="font-size:0.72rem;color:var(--muted);">Click any prompt below to inspect its chronological per-turn token spend</span>
+                  </div>
+                  ${mergedSubStrip}
+                  <div class="prompt-list">
+                    ${promptsHtml}
+                  </div>
+                </div>
+              </td>
+            </tr>
+          `
+          );
         })
         .join("");
     }

@@ -566,6 +566,34 @@ function extractModelFromInput(rawContent) {
   return null;
 }
 
+/**
+ * Extracts a short subagent role label from an initial subagent prompt or system message if present.
+ *
+ * @param {string} rawText - Prompt or system message text
+ * @returns {string|null} Role title if detected
+ */
+function extractSubagentRoleFromPrompt(rawText) {
+  if (!rawText || typeof rawText !== "string") return null;
+  const roleMatch = rawText.match(
+    /You are (?:the |a |an )?\*\*?([A-Za-z0-9 &/_-]{3,45}?)\*\*?(?:\.|,|for|specializing|responsible)/i
+  );
+  if (roleMatch && roleMatch[1]) {
+    return roleMatch[1].trim();
+  }
+  if (/firestore\.rules/i.test(rawText)) return "Firestore Rules Author";
+  if (/generate_image|outpaint|widescreen|logo/i.test(rawText)) return "Image Generator";
+  return null;
+}
+
+/**
+ * Parses a single Antigravity transcript.jsonl file into conversation, prompt-level,
+ * and chronological turn-level token & cost metrics, while tracking parent/child subagent links.
+ *
+ * @param {string} transcriptPath - Absolute path to transcript.jsonl
+ * @param {string} conversationId - UUID of the conversation
+ * @param {object} [hookMeta={}] - Optional metadata from Stop hook or surface scanner
+ * @returns {object|null} Parsed conversation record or null if empty
+ */
 function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
   if (!fs.existsSync(transcriptPath)) return null;
 
@@ -592,6 +620,7 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
   let savedByCacheUsd = 0;
   let promptCount = 0;
   let turnCount = 0;
+  let longContextTurns = 0;
   let toolCallCount = 0;
   let subagentCount = 0;
   let title = null;
@@ -600,10 +629,16 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
       ? normalizeModelName(hookMeta.modelName)
       : null;
   const projectVoteCounts = new Map();
-  let parentConversationId =
+
+  let dbParentId =
     dbRow?.parent_conversation_id && dbRow.parent_conversation_id !== conversationId
       ? dbRow.parent_conversation_id
       : null;
+  let stepZeroSenderId = null;
+  let sendMessageRecipientId = null;
+  let startedWithSystemMessage = false;
+  const childSubagentIds = new Set();
+  const childSubagentMeta = {};
 
   // 1. Seed project from Antigravity's official project_id & workspace_uris in conversation_summaries.db
   const dbConfiguredProject =
@@ -655,13 +690,17 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
   let currentModel = detectedModel || "Gemini 2.5 Pro (Default)";
   let startedAt = null;
   let updatedAt = null;
+  const fallbackIso = stat.mtime.toISOString();
   const byDate = {};
   const byModelInConv = {};
+  const prompts = [];
+  let activePrompt = null;
+  let lastInvokeSubagentRole = null;
 
-  for (const line of lines) {
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     let step;
     try {
-      step = JSON.parse(line);
+      step = JSON.parse(lines[lineIdx]);
     } catch {
       continue;
     }
@@ -674,23 +713,75 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
 
     if (step.type === "USER_INPUT") {
       promptCount++;
+      const promptPreview =
+        typeof step.content === "string"
+          ? cleanUserPromptTitle(step.content)
+          : `Prompt #${promptCount}`;
       if (!title && typeof step.content === "string") {
-        title = cleanUserPromptTitle(step.content);
+        title = promptPreview;
       }
       const modelChange = extractModelFromInput(step.content);
       if (modelChange) {
         currentModel = modelChange;
         detectedModel = modelChange;
       }
+
+      activePrompt = {
+        promptIndex: promptCount,
+        stepIndex: step.step_index ?? lineIdx,
+        timestamp: stepTime || startedAt || fallbackIso,
+        preview: promptPreview,
+        model: currentModel,
+        turnCount: 0,
+        subagentTurnCount: 0,
+        subagentRunCount: 0,
+        toolCallCount: 0,
+        longContextTurns: 0,
+        inputTokens: 0,
+        cacheReadTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        estimatedCostUsd: 0,
+        savedByCacheUsd: 0,
+        turns: [],
+      };
+      prompts.push(activePrompt);
     } else if (step.type === "SYSTEM_MESSAGE" && typeof step.content === "string") {
       if (!title) {
         title = cleanUserPromptTitle(step.content);
       }
       const senderMatch = step.content.match(
-        /sender=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
+        /sender=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?!\/task-)/i
       );
-      if (senderMatch && senderMatch[1] && senderMatch[1] !== conversationId) {
-        parentConversationId = senderMatch[1];
+      const senderUuid =
+        senderMatch && senderMatch[1] && senderMatch[1] !== conversationId
+          ? senderMatch[1]
+          : null;
+
+      if ((step.step_index === 0 || lineIdx === 0) && promptCount === 0) {
+        startedWithSystemMessage = true;
+        if (senderUuid) {
+          stepZeroSenderId = senderUuid;
+        }
+      } else if (senderUuid) {
+        // A mid-conversation SYSTEM_MESSAGE from another agent UUID is a child subagent reporting back
+        childSubagentIds.add(senderUuid);
+      }
+    } else if (step.type === "INVOKE_SUBAGENT" && typeof step.content === "string") {
+      const idMatches = step.content.matchAll(
+        /"conversationId"\s*:\s*"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"/gi
+      );
+      for (const m of idMatches) {
+        if (m[1] && m[1] !== conversationId) {
+          childSubagentIds.add(m[1]);
+          if (lastInvokeSubagentRole && !childSubagentMeta[m[1]]?.role) {
+            childSubagentMeta[m[1]] = {
+              ...(childSubagentMeta[m[1]] || {}),
+              role: lastInvokeSubagentRole,
+              spawnedAtPromptIndex: activePrompt?.promptIndex || 1,
+            };
+          }
+        }
       }
     }
 
@@ -703,10 +794,41 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
     }
 
     if (step.type === "PLANNER_RESPONSE") {
+      // If a subagent or system session starts with PLANNER_RESPONSE before any USER_INPUT, create an initial prompt group
+      if (!activePrompt) {
+        promptCount = Math.max(promptCount, 1);
+        activePrompt = {
+          promptIndex: 1,
+          stepIndex: 0,
+          timestamp: startedAt || stepTime || fallbackIso,
+          preview: title || `Task Session ${conversationId.slice(0, 8)}`,
+          model: currentModel,
+          turnCount: 0,
+          subagentTurnCount: 0,
+          subagentRunCount: 0,
+          toolCallCount: 0,
+          longContextTurns: 0,
+          inputTokens: 0,
+          cacheReadTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          estimatedCostUsd: 0,
+          savedByCacheUsd: 0,
+          turns: [],
+        };
+        prompts.push(activePrompt);
+      }
+
       turnCount++;
       const stepIn = Number(step.input_tokens || 0);
       const stepCache = Number(step.cache_read_tokens || 0);
       const stepOut = Number(step.output_tokens || 0);
+      const stepTot = stepIn + stepCache + stepOut;
+      const isLongCtx = stepIn + stepCache > 200_000;
+      if (isLongCtx) {
+        longContextTurns++;
+        activePrompt.longContextTurns++;
+      }
 
       const { costUsd, savedByCacheUsd: stepSaved } = computeStepCostUsd(
         stepIn,
@@ -742,7 +864,7 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
         (byModelInConv[currentModel].savedByCacheUsd + stepSaved).toFixed(6)
       );
 
-      const dateKey = (stepTime || stat.mtime.toISOString()).slice(0, 10);
+      const dateKey = (stepTime || fallbackIso).slice(0, 10);
       if (!byDate[dateKey]) {
         byDate[dateKey] = {
           inputTokens: 0,
@@ -761,15 +883,26 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
       byDate[dateKey].estimatedCostUsd = Number((byDate[dateKey].estimatedCostUsd + costUsd).toFixed(6));
       byDate[dateKey].savedByCacheUsd = Number((byDate[dateKey].savedByCacheUsd + stepSaved).toFixed(6));
 
+      const turnToolNames = [];
       if (Array.isArray(step.tool_calls)) {
         toolCallCount += step.tool_calls.length;
         byDate[dateKey].toolCalls += step.tool_calls.length;
         for (const tc of step.tool_calls) {
-          if (tc.name === "invoke_subagent") subagentCount++;
-          if (tc.name === "send_message" && tc.args && tc.args.Recipient && !parentConversationId) {
+          if (tc.name) turnToolNames.push(tc.name);
+          if (tc.name === "invoke_subagent") {
+            subagentCount++;
+            const rawRole = tc.args?.Role || tc.args?.TypeName || null;
+            if (rawRole) {
+              lastInvokeSubagentRole = String(rawRole).replace(/^["']|["']$/g, "").trim();
+            }
+          }
+          if (tc.name === "send_message" && tc.args && tc.args.Recipient) {
             const cleanedRecip = String(tc.args.Recipient).replace(/["']/g, "").trim();
-            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanedRecip)) {
-              parentConversationId = cleanedRecip;
+            if (
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanedRecip) &&
+              cleanedRecip !== conversationId
+            ) {
+              sendMessageRecipientId = cleanedRecip;
             }
           }
           const argsStr = JSON.stringify(tc.args || {});
@@ -779,6 +912,37 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
           }
         }
       }
+
+      activePrompt.turnCount += 1;
+      activePrompt.toolCallCount += turnToolNames.length;
+      activePrompt.inputTokens += stepIn;
+      activePrompt.cacheReadTokens += stepCache;
+      activePrompt.outputTokens += stepOut;
+      activePrompt.totalTokens += stepTot;
+      activePrompt.estimatedCostUsd = Number(
+        (activePrompt.estimatedCostUsd + costUsd).toFixed(6)
+      );
+      activePrompt.savedByCacheUsd = Number(
+        (activePrompt.savedByCacheUsd + stepSaved).toFixed(6)
+      );
+
+      activePrompt.turns.push({
+        turnIndex: turnCount,
+        promptTurnIndex: activePrompt.turnCount,
+        stepIndex: step.step_index ?? lineIdx,
+        timestamp: stepTime || updatedAt || fallbackIso,
+        model: currentModel,
+        inputTokens: stepIn,
+        cacheReadTokens: stepCache,
+        outputTokens: stepOut,
+        totalTokens: stepTot,
+        isLongContext: isLongCtx,
+        estimatedCostUsd: costUsd,
+        savedByCacheUsd: stepSaved,
+        toolCalls: turnToolNames.length,
+        tools: turnToolNames.slice(0, 8),
+        isSubagent: false,
+      });
     }
   }
 
@@ -803,12 +967,39 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
     return null;
   }
 
-  const fallbackIso = stat.mtime.toISOString();
+  // Determine if this session is a child subagent and resolve its true parent conversation ID:
+  // 1. Authoritative DB parent_conversation_id
+  // 2. Started with a step 0 SYSTEM_MESSAGE containing sender=<PARENT_UUID> (modern subagent protocol)
+  // 3. Single-prompt agent session that reports back via send_message(Recipient=<PARENT_UUID>)
+  let parentConversationId = null;
+  let isSubagentSession = false;
+  if (dbParentId) {
+    parentConversationId = dbParentId;
+    isSubagentSession = true;
+  } else if (startedWithSystemMessage && stepZeroSenderId) {
+    parentConversationId = stepZeroSenderId;
+    isSubagentSession = true;
+  } else if (promptCount <= 1 && sendMessageRecipientId && subagentCount === 0) {
+    parentConversationId = sendMessageRecipientId;
+    isSubagentSession = true;
+  }
+
+  const resolvedTitle = title || dbRow?.title || `Session ${conversationId.slice(0, 8)}`;
+  const inferredRole = isSubagentSession
+    ? extractSubagentRoleFromPrompt(resolvedTitle) || "Subagent"
+    : null;
+
   return {
     conversationId,
     parentConversationId,
+    isSubagentSession,
+    subagentRole: inferredRole,
+    childSubagentIds: Array.from(childSubagentIds),
+    childSubagentMeta,
+    mergedSubagentCount: 0,
+    mergedSubagents: [],
     surface,
-    title: title || dbRow?.title || `Session ${conversationId.slice(0, 8)}`,
+    title: resolvedTitle,
     project,
     model: detectedModel || "Gemini 2.5 Pro (Default)",
     hasTokenTelemetry: totalTokens > 0,
@@ -816,6 +1007,7 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
     updatedAt: updatedAt || fallbackIso,
     promptCount,
     turnCount,
+    longContextTurns,
     toolCallCount,
     subagentCount,
     inputTokens,
@@ -826,7 +1018,281 @@ function parseTranscriptFile(transcriptPath, conversationId, hookMeta = {}) {
     savedByCacheUsd: Number(savedByCacheUsd.toFixed(6)),
     byDate,
     byModelInConv,
+    prompts,
   };
+}
+
+/**
+ * Resolves and merges all child subagent conversations into their root parent conversation,
+ * interleaving subagent turns chronologically inside the parent prompt that spawned them.
+ *
+ * @param {Record<string, object>} rawConversationsMap - Map of all parsed conversations by ID
+ * @returns {Record<string, object>} Map containing only root conversations with subagents merged in
+ */
+function mergeSubagentsIntoParents(rawConversationsMap) {
+  const allConvs = Object.values(rawConversationsMap);
+
+  // 1. Cross-link any child discovered via parent's INVOKE_SUBAGENT / mid-session SYSTEM_MESSAGE
+  for (const parent of allConvs) {
+    if (!Array.isArray(parent.childSubagentIds)) continue;
+    for (const childId of parent.childSubagentIds) {
+      const child = rawConversationsMap[childId];
+      if (!child || child.conversationId === parent.conversationId) continue;
+      // Only link as subagent if child was flagged or started after parent with <= 1 prompt
+      if (child.isSubagentSession || child.promptCount <= 1) {
+        child.isSubagentSession = true;
+        if (!child.parentConversationId) {
+          child.parentConversationId = parent.conversationId;
+        }
+        const metaRole = parent.childSubagentMeta?.[childId]?.role;
+        if (metaRole && (!child.subagentRole || child.subagentRole === "Subagent")) {
+          child.subagentRole = metaRole;
+        }
+      }
+    }
+  }
+
+  // 2. Helper to walk parentConversationId chain up to the root conversation (with cycle guard)
+  function findRootConversation(conv) {
+    const visited = new Set([conv.conversationId]);
+    let curr = conv;
+    while (curr.isSubagentSession && curr.parentConversationId) {
+      const nextParent = rawConversationsMap[curr.parentConversationId];
+      if (!nextParent || visited.has(nextParent.conversationId)) {
+        break;
+      }
+      visited.add(nextParent.conversationId);
+      curr = nextParent;
+    }
+    return curr;
+  }
+
+  const rootConversationsMap = {};
+  const subagentsToMerge = [];
+
+  for (const conv of allConvs) {
+    const root = findRootConversation(conv);
+    if (root && root.conversationId !== conv.conversationId) {
+      subagentsToMerge.push({ child: conv, root });
+    } else {
+      rootConversationsMap[conv.conversationId] = conv;
+    }
+  }
+
+  // Sort subagents chronologically by startedAt so multi-subagent runs merge in exact execution order
+  subagentsToMerge.sort(
+    (a, b) => new Date(a.child.startedAt).getTime() - new Date(b.child.startedAt).getTime()
+  );
+
+  for (const { child, root } of subagentsToMerge) {
+    if (child.project === "general" && root.project && root.project !== "general") {
+      child.project = root.project;
+    } else if (root.project === "general" && child.project && child.project !== "general") {
+      root.project = child.project;
+    }
+
+    // Roll up token, cost, turn, and tool call totals into the root conversation
+    root.inputTokens += child.inputTokens || 0;
+    root.cacheReadTokens += child.cacheReadTokens || 0;
+    root.outputTokens += child.outputTokens || 0;
+    root.totalTokens = root.inputTokens + root.cacheReadTokens + root.outputTokens;
+    root.hasTokenTelemetry = root.totalTokens > 0;
+    root.turnCount += child.turnCount || 0;
+    root.longContextTurns = (root.longContextTurns || 0) + (child.longContextTurns || 0);
+    root.toolCallCount += child.toolCallCount || 0;
+    root.estimatedCostUsd = Number(
+      ((root.estimatedCostUsd || 0) + (child.estimatedCostUsd || 0)).toFixed(6)
+    );
+    root.savedByCacheUsd = Number(
+      ((root.savedByCacheUsd || 0) + (child.savedByCacheUsd || 0)).toFixed(6)
+    );
+
+    if (child.startedAt && (!root.startedAt || child.startedAt < root.startedAt)) {
+      root.startedAt = child.startedAt;
+    }
+    if (child.updatedAt && (!root.updatedAt || child.updatedAt > root.updatedAt)) {
+      root.updatedAt = child.updatedAt;
+    }
+
+    // Merge byDate into root
+    for (const [dateKey, d] of Object.entries(child.byDate || {})) {
+      if (!root.byDate[dateKey]) {
+        root.byDate[dateKey] = {
+          inputTokens: 0,
+          cacheReadTokens: 0,
+          outputTokens: 0,
+          turns: 0,
+          toolCalls: 0,
+          estimatedCostUsd: 0,
+          savedByCacheUsd: 0,
+        };
+      }
+      root.byDate[dateKey].inputTokens += d.inputTokens || 0;
+      root.byDate[dateKey].cacheReadTokens += d.cacheReadTokens || 0;
+      root.byDate[dateKey].outputTokens += d.outputTokens || 0;
+      root.byDate[dateKey].turns += d.turns || 0;
+      root.byDate[dateKey].toolCalls += d.toolCalls || 0;
+      root.byDate[dateKey].estimatedCostUsd = Number(
+        (root.byDate[dateKey].estimatedCostUsd + (d.estimatedCostUsd || 0)).toFixed(6)
+      );
+      root.byDate[dateKey].savedByCacheUsd = Number(
+        (root.byDate[dateKey].savedByCacheUsd + (d.savedByCacheUsd || 0)).toFixed(6)
+      );
+    }
+
+    // Merge byModelInConv into root
+    for (const [mod, mData] of Object.entries(child.byModelInConv || {})) {
+      if (!root.byModelInConv[mod]) {
+        root.byModelInConv[mod] = {
+          inputTokens: 0,
+          cacheReadTokens: 0,
+          outputTokens: 0,
+          turns: 0,
+          estimatedCostUsd: 0,
+          savedByCacheUsd: 0,
+        };
+      }
+      root.byModelInConv[mod].inputTokens += mData.inputTokens || 0;
+      root.byModelInConv[mod].cacheReadTokens += mData.cacheReadTokens || 0;
+      root.byModelInConv[mod].outputTokens += mData.outputTokens || 0;
+      root.byModelInConv[mod].turns += mData.turns || 0;
+      root.byModelInConv[mod].estimatedCostUsd = Number(
+        (root.byModelInConv[mod].estimatedCostUsd + (mData.estimatedCostUsd || 0)).toFixed(6)
+      );
+      root.byModelInConv[mod].savedByCacheUsd = Number(
+        (root.byModelInConv[mod].savedByCacheUsd + (mData.savedByCacheUsd || 0)).toFixed(6)
+      );
+    }
+
+    const roleLabel =
+      root.childSubagentMeta?.[child.conversationId]?.role ||
+      child.subagentRole ||
+      "Subagent";
+
+    root.mergedSubagentCount = (root.mergedSubagentCount || 0) + 1;
+    root.subagentCount = Math.max(root.subagentCount || 0, root.mergedSubagentCount);
+    root.mergedSubagents.push({
+      conversationId: child.conversationId,
+      role: roleLabel,
+      title: child.title,
+      model: child.model,
+      startedAt: child.startedAt,
+      updatedAt: child.updatedAt,
+      turnCount: child.turnCount,
+      toolCallCount: child.toolCallCount,
+      inputTokens: child.inputTokens,
+      cacheReadTokens: child.cacheReadTokens,
+      outputTokens: child.outputTokens,
+      totalTokens: child.totalTokens,
+      estimatedCostUsd: child.estimatedCostUsd,
+      savedByCacheUsd: child.savedByCacheUsd,
+    });
+
+    // Find the prompt in root that was active when this subagent started
+    if (!Array.isArray(root.prompts) || root.prompts.length === 0) {
+      root.prompts = [
+        {
+          promptIndex: 1,
+          stepIndex: 0,
+          timestamp: root.startedAt,
+          preview: root.title,
+          model: root.model,
+          turnCount: 0,
+          subagentTurnCount: 0,
+          subagentRunCount: 0,
+          toolCallCount: 0,
+          longContextTurns: 0,
+          inputTokens: 0,
+          cacheReadTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          estimatedCostUsd: 0,
+          savedByCacheUsd: 0,
+          turns: [],
+        },
+      ];
+      root.promptCount = Math.max(root.promptCount || 0, 1);
+    }
+
+    const childStartMs = new Date(child.startedAt).getTime();
+    let targetPrompt = root.prompts[0];
+    const hintedPromptIdx = root.childSubagentMeta?.[child.conversationId]?.spawnedAtPromptIndex;
+    if (hintedPromptIdx && root.prompts[hintedPromptIdx - 1]) {
+      targetPrompt = root.prompts[hintedPromptIdx - 1];
+    } else {
+      for (const p of root.prompts) {
+        const pTimeMs = new Date(p.timestamp).getTime();
+        if (pTimeMs <= childStartMs + 5000) {
+          targetPrompt = p;
+        }
+      }
+    }
+
+    // Collect all turns from the child subagent and tag them with subagent metadata
+    const childTurns = [];
+    for (const cp of child.prompts || []) {
+      for (let i = 0; i < (cp.turns || []).length; i++) {
+        const t = cp.turns[i];
+        childTurns.push({
+          ...t,
+          isSubagent: true,
+          subagentId: child.conversationId.slice(0, 8),
+          subagentRole: roleLabel,
+          subagentTurnIndex: i + 1,
+          subagentTitle: child.title,
+        });
+      }
+    }
+
+    targetPrompt.subagentRunCount = (targetPrompt.subagentRunCount || 0) + 1;
+    targetPrompt.subagentTurnCount = (targetPrompt.subagentTurnCount || 0) + child.turnCount;
+    targetPrompt.turnCount += child.turnCount || 0;
+    targetPrompt.longContextTurns =
+      (targetPrompt.longContextTurns || 0) + (child.longContextTurns || 0);
+    targetPrompt.toolCallCount += child.toolCallCount || 0;
+    targetPrompt.inputTokens += child.inputTokens || 0;
+    targetPrompt.cacheReadTokens += child.cacheReadTokens || 0;
+    targetPrompt.outputTokens += child.outputTokens || 0;
+    targetPrompt.totalTokens += child.totalTokens || 0;
+    targetPrompt.estimatedCostUsd = Number(
+      ((targetPrompt.estimatedCostUsd || 0) + (child.estimatedCostUsd || 0)).toFixed(6)
+    );
+    targetPrompt.savedByCacheUsd = Number(
+      ((targetPrompt.savedByCacheUsd || 0) + (child.savedByCacheUsd || 0)).toFixed(6)
+    );
+
+    targetPrompt.turns.push(...childTurns);
+  }
+
+  // 3. Re-sort turns chronologically inside every prompt and re-index turnIndex (1..N) across each root conversation
+  for (const conv of Object.values(rootConversationsMap)) {
+    delete conv.childSubagentIds;
+    delete conv.childSubagentMeta;
+
+    let globalTurnIdx = 0;
+    for (let pIdx = 0; pIdx < (conv.prompts || []).length; pIdx++) {
+      const p = conv.prompts[pIdx];
+      p.promptIndex = pIdx + 1;
+      if (Array.isArray(p.turns) && p.turns.length > 0) {
+        p.turns.sort((a, b) => {
+          const tDiff = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+          if (tDiff !== 0) return tDiff;
+          if (Boolean(a.isSubagent) !== Boolean(b.isSubagent)) {
+            return a.isSubagent ? 1 : -1;
+          }
+          return (a.stepIndex || 0) - (b.stepIndex || 0);
+        });
+
+        for (let tIdx = 0; tIdx < p.turns.length; tIdx++) {
+          globalTurnIdx++;
+          p.turns[tIdx].turnIndex = globalTurnIdx;
+          p.turns[tIdx].promptTurnIndex = tIdx + 1;
+        }
+      }
+    }
+  }
+
+  return rootConversationsMap;
 }
 
 function buildUserSummary(userMeta, conversationsMap) {
@@ -840,13 +1306,17 @@ function buildUserSummary(userMeta, conversationsMap) {
   let totalCostUsd = 0;
   let totalSavedByCacheUsd = 0;
   let totalPrompts = 0;
+  let trackedPrompts = 0;
+  let legacyPromptsPreTelemetry = 0;
   let totalTurns = 0;
   let trackedTurns = 0;
   let legacyTurnsPreTelemetry = 0;
+  let longContextTurns = 0;
   let trackedConversations = 0;
   let legacyConversationsPreTelemetry = 0;
   let totalToolCalls = 0;
   let totalSubagents = 0;
+  let mergedSubagentRuns = 0;
 
   const daily = {};
   const byProject = {};
@@ -860,15 +1330,19 @@ function buildUserSummary(userMeta, conversationsMap) {
     totalSavedByCacheUsd += conv.savedByCacheUsd || 0;
     totalPrompts += conv.promptCount;
     totalTurns += conv.turnCount;
+    longContextTurns += conv.longContextTurns || 0;
     if (conv.totalTokens > 0) {
       trackedConversations += 1;
+      trackedPrompts += conv.promptCount;
       trackedTurns += conv.turnCount;
     } else {
       legacyConversationsPreTelemetry += 1;
+      legacyPromptsPreTelemetry += conv.promptCount;
       legacyTurnsPreTelemetry += conv.turnCount;
     }
     totalToolCalls += conv.toolCallCount;
     totalSubagents += conv.subagentCount || 0;
+    mergedSubagentRuns += conv.mergedSubagentCount || 0;
 
     const proj = conv.project || "general";
     if (!byProject[proj]) {
@@ -881,8 +1355,11 @@ function buildUserSummary(userMeta, conversationsMap) {
         conversations: 0,
         trackedConversations: 0,
         legacyConversationsPreTelemetry: 0,
+        prompts: 0,
+        trackedPrompts: 0,
         turns: 0,
         trackedTurns: 0,
+        subagentRuns: 0,
         inputTokens: 0,
         cacheReadTokens: 0,
         outputTokens: 0,
@@ -892,8 +1369,11 @@ function buildUserSummary(userMeta, conversationsMap) {
       };
     }
     byProject[proj].conversations += 1;
+    byProject[proj].prompts += conv.promptCount || 0;
+    byProject[proj].subagentRuns += conv.mergedSubagentCount || 0;
     if (conv.totalTokens > 0) {
       byProject[proj].trackedConversations += 1;
+      byProject[proj].trackedPrompts += conv.promptCount || 0;
       byProject[proj].trackedTurns += conv.turnCount;
     } else {
       byProject[proj].legacyConversationsPreTelemetry += 1;
@@ -1015,8 +1495,19 @@ function buildUserSummary(userMeta, conversationsMap) {
       ? Number(((totalCacheReadTokens / totalContextTokens) * 100).toFixed(2))
       : 0;
 
+  const avgCostPerPromptUsd =
+    trackedPrompts > 0 ? Number((totalCostUsd / trackedPrompts).toFixed(4)) : 0;
+  const avgCostPerTurnUsd =
+    trackedTurns > 0 ? Number((totalCostUsd / trackedTurns).toFixed(4)) : 0;
+  const avgTokensPerPrompt =
+    trackedPrompts > 0 ? Math.round(totalTokens / trackedPrompts) : 0;
+  const avgTokensPerTurn =
+    trackedTurns > 0 ? Math.round(totalTokens / trackedTurns) : 0;
+  const avgTurnsPerPrompt =
+    totalPrompts > 0 ? Number((totalTurns / totalPrompts).toFixed(2)) : 0;
+
   return {
-    schemaVersion: "1.6.0",
+    schemaVersion: "2.1.0",
     lastSyncedAt: new Date().toISOString(),
     telemetryStartDate: "2026-10-09",
     user: userMeta,
@@ -1026,11 +1517,15 @@ function buildUserSummary(userMeta, conversationsMap) {
       trackedConversations,
       legacyConversationsPreTelemetry,
       prompts: totalPrompts,
+      trackedPrompts,
+      legacyPromptsPreTelemetry,
       turns: totalTurns,
       trackedTurns,
       legacyTurnsPreTelemetry,
+      longContextTurns,
       toolCalls: totalToolCalls,
       subagents: totalSubagents,
+      mergedSubagentRuns,
       inputTokens: totalInputTokens,
       cacheReadTokens: totalCacheReadTokens,
       outputTokens: totalOutputTokens,
@@ -1038,6 +1533,11 @@ function buildUserSummary(userMeta, conversationsMap) {
       cacheHitRatePct: cacheHitRate,
       estimatedCostUsd: Number(totalCostUsd.toFixed(2)),
       savedByCacheUsd: Number(totalSavedByCacheUsd.toFixed(2)),
+      avgCostPerPromptUsd,
+      avgCostPerTurnUsd,
+      avgTokensPerPrompt,
+      avgTokensPerTurn,
+      avgTurnsPerPrompt,
     },
     daily: Object.values(daily).sort((a, b) => a.date.localeCompare(b.date)),
     byProject: Object.values(byProject).sort((a, b) => b.totalTokens - a.totalTokens || b.turns - a.turns),
@@ -1074,40 +1574,10 @@ function writeUiBundle() {
   return bundlePayload;
 }
 
-/**
- * Optionally writes a per-repository `.gemini/token-usage.json` ledger inside each actual Git repository on disk.
- */
-function writePerRepoReports(summary) {
-  const written = [];
-  for (const proj of summary.byProject) {
-    if (!proj.repoPath || !fs.existsSync(proj.repoPath)) continue;
-    try {
-      const repoGeminiDir = path.join(proj.repoPath, ".gemini");
-      fs.mkdirSync(repoGeminiDir, { recursive: true });
-      const repoConvs = summary.conversations.filter((c) => c.project === proj.project);
-      const reportPath = path.join(repoGeminiDir, "token-usage.json");
-      const payload = {
-        schemaVersion: "1.6.0",
-        generatedAt: new Date().toISOString(),
-        project: proj.project,
-        repoPath: proj.repoPath,
-        gitRemote: proj.gitRemote,
-        user: summary.user,
-        totals: proj,
-        conversations: repoConvs,
-      };
-      fs.writeFileSync(reportPath, JSON.stringify(payload, null, 2), "utf8");
-      written.push({ project: proj.project, reportPath });
-    } catch {}
-  }
-  return written;
-}
-
 export function runSync({
   backfill = false,
   hookPayload = null,
   printSummary = false,
-  writeRepoReports = false,
 } = {}) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   getAntigravityProjectRegistry(true);
@@ -1167,26 +1637,75 @@ export function runSync({
         const parsed = parseTranscriptFile(tPath, convId, hookPayload);
         if (parsed) {
           existingConversationsMap[convId] = parsed;
+          // If this Stop hook came from a child subagent, also re-parse its root parent transcript
+          // from disk before merging so the parent's turns are never double-counted.
+          if (parsed.isSubagentSession && parsed.parentConversationId) {
+            let parentId = parsed.parentConversationId;
+            const visited = new Set([convId]);
+            while (parentId && !visited.has(parentId)) {
+              visited.add(parentId);
+              for (const b of BRAIN_DIRS) {
+                const pPath = path.join(
+                  b.path,
+                  parentId,
+                  ".system_generated",
+                  "logs",
+                  "transcript.jsonl"
+                );
+                if (fs.existsSync(pPath)) {
+                  const reParsedParent = parseTranscriptFile(pPath, parentId, {
+                    surface: b.surface,
+                  });
+                  if (reParsedParent) {
+                    existingConversationsMap[parentId] = reParsedParent;
+                    parentId = reParsedParent.isSubagentSession
+                      ? reParsedParent.parentConversationId
+                      : null;
+                  } else {
+                    parentId = null;
+                  }
+                  break;
+                }
+              }
+              if (!existingConversationsMap[parentId]) break;
+            }
+          } else if (Array.isArray(parsed.childSubagentIds) && parsed.childSubagentIds.length > 0) {
+            // If this Stop hook came from a parent that has child subagents, ensure child transcripts are loaded
+            for (const childId of parsed.childSubagentIds) {
+              if (!existingConversationsMap[childId]) {
+                for (const b of BRAIN_DIRS) {
+                  const cPath = path.join(
+                    b.path,
+                    childId,
+                    ".system_generated",
+                    "logs",
+                    "transcript.jsonl"
+                  );
+                  if (fs.existsSync(cPath)) {
+                    const parsedChild = parseTranscriptFile(cPath, childId, {
+                      surface: b.surface,
+                    });
+                    if (parsedChild) {
+                      existingConversationsMap[childId] = parsedChild;
+                    }
+                    break;
+                  }
+                }
+              }
+            }
+          }
         }
         break;
       }
     }
   }
 
-  // Second pass: inherit repository from parent conversation for subagent sessions
-  for (const conv of Object.values(existingConversationsMap)) {
-    if (conv.project === "general" && conv.parentConversationId) {
-      const parent = existingConversationsMap[conv.parentConversationId];
-      if (parent && parent.project && parent.project !== "general") {
-        conv.project = parent.project;
-      }
-    }
-  }
+  // Merge all child subagent conversations into their parent conversations in chronological order
+  const mergedConversationsMap = mergeSubagentsIntoParents(existingConversationsMap);
 
-  const summary = buildUserSummary(userMeta, existingConversationsMap);
+  const summary = buildUserSummary(userMeta, mergedConversationsMap);
   fs.writeFileSync(userFilePath, JSON.stringify(summary, null, 2), "utf8");
   const bundle = writeUiBundle();
-  const repoReports = writeRepoReports ? writePerRepoReports(summary) : [];
 
   if (printSummary) {
     console.log(
@@ -1196,7 +1715,6 @@ export function runSync({
           totals: summary.totals,
           topProjects: summary.byProject,
           models: summary.byModel,
-          repoReportsWritten: repoReports.length,
         },
         null,
         2
@@ -1204,7 +1722,7 @@ export function runSync({
     );
   }
 
-  return { summary, bundle, repoReports };
+  return { summary, bundle };
 }
 
 const isMain =
@@ -1214,9 +1732,8 @@ if (isMain) {
   const args = process.argv.slice(2);
   const isBackfill = args.includes("--backfill");
   const isSummary = args.includes("--summary");
-  const isWriteRepoReports = args.includes("--write-repo-reports");
 
-  if (!process.stdin.isTTY && !isBackfill && !isSummary && !isWriteRepoReports) {
+  if (!process.stdin.isTTY && !isBackfill && !isSummary) {
     let inputData = "";
     process.stdin.setEncoding("utf8");
     process.stdin.on("data", (chunk) => {
@@ -1238,7 +1755,6 @@ if (isMain) {
     runSync({
       backfill: isBackfill || true,
       printSummary: isSummary,
-      writeRepoReports: isWriteRepoReports,
     });
   }
 }
